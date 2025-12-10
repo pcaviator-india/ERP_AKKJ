@@ -1,0 +1,4 @@
+{
+  "watch": ["src"],
+  "ignore": ["config/**/*", "client/dist/**/*"]
+}
