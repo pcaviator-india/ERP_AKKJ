@@ -2,39 +2,6 @@ const express = require("express");
 const router = express.Router();
 const { pool } = require("../db");
 
-async function ensureTables() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS PriceLists (
-      PriceListID BIGINT AUTO_INCREMENT PRIMARY KEY,
-      CompanyID BIGINT NOT NULL,
-      Name VARCHAR(255) NOT NULL,
-      IsActive TINYINT(1) NOT NULL DEFAULT 1,
-      CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE KEY UQ_PriceLists_Company_Name (CompanyID, Name),
-      INDEX IX_PriceLists_Company (CompanyID)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS PriceListItems (
-      PriceListItemID BIGINT AUTO_INCREMENT PRIMARY KEY,
-      PriceListID BIGINT NOT NULL,
-      ProductID INT NOT NULL,
-      MinQty DECIMAL(18,4) NOT NULL DEFAULT 1,
-      Price DECIMAL(18,4) NOT NULL,
-      IsActive TINYINT(1) NOT NULL DEFAULT 1,
-      CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT FK_PriceListItems_PriceLists FOREIGN KEY (PriceListID) REFERENCES PriceLists(PriceListID),
-      CONSTRAINT FK_PriceListItems_Products FOREIGN KEY (ProductID) REFERENCES Products(ProductID),
-      UNIQUE KEY UQ_PriceListItem (PriceListID, ProductID, MinQty)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-  `);
-}
-
-ensureTables().catch((err) => {
-  console.error("Failed to ensure price list tables", err);
-});
-
 // GET /api/price-lists
 router.get("/", async (req, res) => {
   const companyId = req.user.CompanyID;
