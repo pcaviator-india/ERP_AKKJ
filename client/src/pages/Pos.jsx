@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../api/http";
 import { useAuth } from "../context/AuthContext";
 import { useConfig } from "../context/ConfigContext";
+import { useLanguage } from "../context/LanguageContext";
 import { printWithFallback } from "../services/printService";
 
 const currencyFormatter = new Intl.NumberFormat("es-CL", {
@@ -80,6 +81,7 @@ export default function Pos() {
   const navigate = useNavigate();
   const { user, company, loading: authLoading, token, logout } = useAuth();
   const { config, updateConfig, ready: configReady } = useConfig();
+  const { t } = useLanguage();
   const [allProducts, setAllProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [taxRates, setTaxRates] = useState([]);
@@ -132,7 +134,9 @@ export default function Pos() {
   const [pinError, setPinError] = useState("");
   const pendingEmployeeRef = useRef(null);
   const [paymentModal, setPaymentModal] = useState(false);
-  const [payments, setPayments] = useState([{ PaymentMethodID: "", Amount: "", ReferenceNumber: "" }]);
+  const [payments, setPayments] = useState([
+    { PaymentMethodID: "", Amount: "", ReferenceNumber: "" },
+  ]);
   const [paymentError, setPaymentError] = useState("");
   const amountRefs = useRef([]);
   const [lastPaymentMethodId, setLastPaymentMethodId] = useState(null);
@@ -148,7 +152,10 @@ export default function Pos() {
   });
   const [promotions, setPromotions] = useState([]);
   const [promotionsLoading, setPromotionsLoading] = useState(false);
-  const screenChannel = useMemo(() => (company?.CompanyID ? `company-${company.CompanyID}` : "default"), [company]);
+  const screenChannel = useMemo(
+    () => (company?.CompanyID ? `company-${company.CompanyID}` : "default"),
+    [company]
+  );
   const publishCustomerScreen = useMemo(
     () =>
       debounce((payload) => {
@@ -165,7 +172,8 @@ export default function Pos() {
   const logoSource = (companyLogo || "").toString().trim();
   const hasLogo = logoSource.length > 0;
   const isAdminUser =
-    (user?.Role && user.Role.toString().toLowerCase() === "admin") || user?.IsAdmin === true;
+    (user?.Role && user.Role.toString().toLowerCase() === "admin") ||
+    user?.IsAdmin === true;
   const companyLabel =
     company?.CompanyName ||
     company?.Name ||
@@ -205,7 +213,10 @@ export default function Pos() {
         return;
       }
       try {
-        await api.post("/api/auth/verify-pin", { EmployeeID: managerId, Pin: pin });
+        await api.post("/api/auth/verify-pin", {
+          EmployeeID: managerId,
+          Pin: pin,
+        });
       } catch (err) {
         const msg = err.response?.data?.error || "PIN verification failed";
         setOverrideModal((prev) => ({ ...prev, error: msg }));
@@ -227,7 +238,15 @@ export default function Pos() {
           : item
       )
     );
-    setOverrideModal({ open: false, productId: null, newPrice: "", managerId: "", pin: "", error: "", idx: null });
+    setOverrideModal({
+      open: false,
+      productId: null,
+      newPrice: "",
+      managerId: "",
+      pin: "",
+      error: "",
+      idx: null,
+    });
   };
 
   useEffect(() => {
@@ -281,16 +300,23 @@ export default function Pos() {
 
   const loadInitialData = async () => {
     try {
-      const [productRes, categoryRes, taxRes, employeeRes, warehouseRes, priceListRes, paymentMethodsRes] =
-        await Promise.all([
-          api.get("/api/products", { params: { ts: Date.now() } }),
-          api.get("/api/categories"),
-          api.get("/api/tax-rates").catch(() => ({ data: [] })),
-          api.get("/api/employees"),
-          api.get("/api/warehouses"),
-          api.get("/api/price-lists").catch(() => ({ data: [] })),
-          api.get("/api/payment-methods").catch(() => ({ data: [] })),
-        ]);
+      const [
+        productRes,
+        categoryRes,
+        taxRes,
+        employeeRes,
+        warehouseRes,
+        priceListRes,
+        paymentMethodsRes,
+      ] = await Promise.all([
+        api.get("/api/products", { params: { ts: Date.now() } }),
+        api.get("/api/categories"),
+        api.get("/api/tax-rates").catch(() => ({ data: [] })),
+        api.get("/api/employees"),
+        api.get("/api/warehouses"),
+        api.get("/api/price-lists").catch(() => ({ data: [] })),
+        api.get("/api/payment-methods").catch(() => ({ data: [] })),
+      ]);
       const productList = Array.isArray(productRes.data)
         ? productRes.data
         : productRes.data?.items ||
@@ -303,7 +329,9 @@ export default function Pos() {
       setTaxRates(rateList);
       setEmployees(employeeRes.data);
       setWarehouses(warehouseRes.data);
-      setPaymentMethods(Array.isArray(paymentMethodsRes.data) ? paymentMethodsRes.data : []);
+      setPaymentMethods(
+        Array.isArray(paymentMethodsRes.data) ? paymentMethodsRes.data : []
+      );
       const defaultWh = warehouseRes.data[0]?.WarehouseID || null;
       setWarehouseId(defaultWh);
       warehouseRef.current = defaultWh;
@@ -318,7 +346,13 @@ export default function Pos() {
       setPriceListInitialized(true);
       setDataLoaded(true);
       // default availability to all products until warehouse fetch runs
-      setAvailableProductIds(new Set(productList.map((p) => normalizeId(getProductId(p))).filter((id) => id)));
+      setAvailableProductIds(
+        new Set(
+          productList
+            .map((p) => normalizeId(getProductId(p)))
+            .filter((id) => id)
+        )
+      );
     } catch (error) {
       console.error("Failed to load POS data", error);
       setStatus({
@@ -595,17 +629,40 @@ export default function Pos() {
     const taxable = product?.IsTaxable;
     if (!taxable) return { rateId: null, ratePerc: 0, isTaxable: 0 };
     const prodRateId = product?.TaxRateID || null;
-    const prodRatePerc = product?.TaxRatePercentage != null ? Number(product.TaxRatePercentage) : null;
-    const rate = taxRates.find((r) => Number(r.TaxRateID) === Number(prodRateId));
-    if (rate) return { rateId: rate.TaxRateID, ratePerc: Number(rate.RatePercentage || 0), isTaxable: 1 };
-    if (prodRatePerc != null) return { rateId: null, ratePerc: prodRatePerc, isTaxable: 1 };
+    const prodRatePerc =
+      product?.TaxRatePercentage != null
+        ? Number(product.TaxRatePercentage)
+        : null;
+    const rate = taxRates.find(
+      (r) => Number(r.TaxRateID) === Number(prodRateId)
+    );
+    if (rate)
+      return {
+        rateId: rate.TaxRateID,
+        ratePerc: Number(rate.RatePercentage || 0),
+        isTaxable: 1,
+      };
+    if (prodRatePerc != null)
+      return { rateId: null, ratePerc: prodRatePerc, isTaxable: 1 };
     const defaultId = config?.tax?.defaultTaxRateId;
     if (defaultId) {
-      const cfgRate = taxRates.find((r) => Number(r.TaxRateID) === Number(defaultId));
-      if (cfgRate) return { rateId: cfgRate.TaxRateID, ratePerc: Number(cfgRate.RatePercentage || 0), isTaxable: 1 };
+      const cfgRate = taxRates.find(
+        (r) => Number(r.TaxRateID) === Number(defaultId)
+      );
+      if (cfgRate)
+        return {
+          rateId: cfgRate.TaxRateID,
+          ratePerc: Number(cfgRate.RatePercentage || 0),
+          isTaxable: 1,
+        };
     }
     const def = taxRates.find((r) => r.IsDefault) || taxRates[0];
-    if (def) return { rateId: def.TaxRateID, ratePerc: Number(def.RatePercentage || 0), isTaxable: 1 };
+    if (def)
+      return {
+        rateId: def.TaxRateID,
+        ratePerc: Number(def.RatePercentage || 0),
+        isTaxable: 1,
+      };
     return { rateId: null, ratePerc: 0, isTaxable: 1 };
   };
 
@@ -618,7 +675,11 @@ export default function Pos() {
     // When warehouse changes, load inventory levels and restrict products to those with stock
     const loadAvailability = async () => {
       if (!warehouseId) {
-        setAvailableProductIds(new Set(allProducts.map((p) => normalizeId(getProductId(p))).filter(Boolean)));
+        setAvailableProductIds(
+          new Set(
+            allProducts.map((p) => normalizeId(getProductId(p))).filter(Boolean)
+          )
+        );
         return;
       }
       try {
@@ -627,13 +688,21 @@ export default function Pos() {
         });
         const rows = Array.isArray(data) ? data : [];
         const withStock = rows.filter((r) => Number(r.StockQuantity || 0) > 0);
-        const ids = withStock.map((r) => normalizeId(r.ProductID)).filter(Boolean);
+        const ids = withStock
+          .map((r) => normalizeId(r.ProductID))
+          .filter(Boolean);
         if (withStock.length > 0) {
           const idSet = new Set(ids);
-          const filtered = allProducts.filter((p) => idSet.has(normalizeId(getProductId(p))));
+          const filtered = allProducts.filter((p) =>
+            idSet.has(normalizeId(getProductId(p)))
+          );
           if (filtered.length === 0) {
             // if there is a mismatch, do not blank the UI
-            const allIds = new Set(allProducts.map((p) => normalizeId(getProductId(p))).filter(Boolean));
+            const allIds = new Set(
+              allProducts
+                .map((p) => normalizeId(getProductId(p)))
+                .filter(Boolean)
+            );
             setAvailableProductIds(allIds);
             // keep allProducts so user can still sell
           } else {
@@ -641,12 +710,16 @@ export default function Pos() {
           }
         } else {
           // fallback to all products if no stock rows returned
-          const idSet = new Set(allProducts.map((p) => normalizeId(getProductId(p))).filter(Boolean));
+          const idSet = new Set(
+            allProducts.map((p) => normalizeId(getProductId(p))).filter(Boolean)
+          );
           setAvailableProductIds(idSet);
         }
       } catch (err) {
         console.warn("Failed to load warehouse availability", err);
-        const idSet = new Set(allProducts.map((p) => normalizeId(getProductId(p))).filter(Boolean));
+        const idSet = new Set(
+          allProducts.map((p) => normalizeId(getProductId(p))).filter(Boolean)
+        );
         setAvailableProductIds(idSet);
       }
     };
@@ -655,15 +728,20 @@ export default function Pos() {
 
   // Derive availableProducts from IDs + allProducts, fallback to all if no IDs
   const availableProducts = useMemo(() => {
-    if (!availableProductIds || availableProductIds.size === 0) return allProducts;
-    const filtered = allProducts.filter((p) => availableProductIds.has(normalizeId(getProductId(p))));
+    if (!availableProductIds || availableProductIds.size === 0)
+      return allProducts;
+    const filtered = allProducts.filter((p) =>
+      availableProductIds.has(normalizeId(getProductId(p)))
+    );
     return filtered.length > 0 ? filtered : allProducts;
   }, [allProducts, availableProductIds]);
 
   const availableCategories = useMemo(() => {
     const source = availableProducts.length ? availableProducts : allProducts;
     if (!categories || categories.length === 0) return [];
-    const catIds = new Set(source.map((p) => getCategoryKey(getProductCategoryId(p))));
+    const catIds = new Set(
+      source.map((p) => getCategoryKey(getProductCategoryId(p)))
+    );
     const hasUncategorized = catIds.has(UNCATEGORIZED_ID);
     // Prefer categories that have available products; if none matched, fall back to all known categories
     const filtered = categories.filter((c) =>
@@ -783,7 +861,9 @@ export default function Pos() {
       if (data?.items) {
         setCart(
           data.items.map((item) => {
-            const prod = allProducts.find((p) => getProductId(p) === item.ProductID) || item;
+            const prod =
+              allProducts.find((p) => getProductId(p) === item.ProductID) ||
+              item;
             const tax = computeTaxForProduct(prod);
             return {
               ProductID: item.ProductID,
@@ -841,7 +921,8 @@ export default function Pos() {
   const computePromotionsDiscount = useMemo(() => {
     const normalizeList = (val) => {
       if (!val) return [];
-      if (Array.isArray(val)) return val.map((v) => String(v).trim()).filter(Boolean);
+      if (Array.isArray(val))
+        return val.map((v) => String(v).trim()).filter(Boolean);
       return String(val)
         .split(",")
         .map((v) => v.trim())
@@ -890,7 +971,10 @@ export default function Pos() {
       };
     });
 
-    const cartLines = (cart || []).map((line, idx) => ({ ...line, __idx: idx }));
+    const cartLines = (cart || []).map((line, idx) => ({
+      ...line,
+      __idx: idx,
+    }));
     const customerName =
       selectedCustomer?.CustomerName ||
       selectedCustomer?.Name ||
@@ -912,8 +996,15 @@ export default function Pos() {
 
     const matchLine = (line, scopes) => {
       const productName =
-        line.ProductName || line.productName || line.Name || line.name || line.SKU || line.Sku || "";
-      const categoryName = line.CategoryName || line.categoryName || line.Category || "";
+        line.ProductName ||
+        line.productName ||
+        line.Name ||
+        line.name ||
+        line.SKU ||
+        line.Sku ||
+        "";
+      const categoryName =
+        line.CategoryName || line.categoryName || line.Category || "";
       const brandName = line.BrandName || line.brandName || "";
 
       const checks = [];
@@ -921,7 +1012,8 @@ export default function Pos() {
         checks.push(scopes.categories.some((c) => eq(c, categoryName)));
       if (scopes.products.length)
         checks.push(scopes.products.some((p) => eq(p, productName)));
-      if (scopes.brands.length) checks.push(scopes.brands.some((b) => eq(b, brandName)));
+      if (scopes.brands.length)
+        checks.push(scopes.brands.some((b) => eq(b, brandName)));
       return checks.length ? checks.some(Boolean) : true;
     };
 
@@ -930,8 +1022,13 @@ export default function Pos() {
     for (const promo of ordered) {
       if (promo.startAt && now < new Date(promo.startAt)) continue;
       if (promo.endAt && now > new Date(promo.endAt)) continue;
-      if (promo.scopes.days.length && !promo.scopes.days.includes(todayCode)) continue;
-      if (promo.scopes.channels.length && !promo.scopes.channels.includes(channel)) continue;
+      if (promo.scopes.days.length && !promo.scopes.days.includes(todayCode))
+        continue;
+      if (
+        promo.scopes.channels.length &&
+        !promo.scopes.channels.includes(channel)
+      )
+        continue;
       if (promo.scopes.customers.length) {
         if (!customerName) continue;
         if (!promo.scopes.customers.some((c) => eq(c, customerName))) continue;
@@ -941,7 +1038,9 @@ export default function Pos() {
         if (!promo.scopes.employees.some((e) => eq(e, employeeName))) continue;
       }
 
-      const eligibleLines = cartLines.filter((line) => matchLine(line, promo.scopes));
+      const eligibleLines = cartLines.filter((line) =>
+        matchLine(line, promo.scopes)
+      );
       if (!eligibleLines.length) continue;
 
       const qtyTotal = eligibleLines.reduce(
@@ -950,7 +1049,10 @@ export default function Pos() {
       );
       if (promo.minQuantity && qtyTotal < promo.minQuantity) continue;
 
-      const eligibleSubtotal = eligibleLines.reduce((sum, line) => sum + lineNet(line), 0);
+      const eligibleSubtotal = eligibleLines.reduce(
+        (sum, line) => sum + lineNet(line),
+        0
+      );
       if (eligibleSubtotal <= 0) continue;
 
       let promoDiscount = 0;
@@ -978,7 +1080,10 @@ export default function Pos() {
         const pct = Math.max(0, Math.min(100, promo.value || 0));
         promoDiscount = (eligibleSubtotal * pct) / 100;
       } else if (promo.type === "amount") {
-        promoDiscount = Math.min(eligibleSubtotal, Math.max(0, promo.value || 0));
+        promoDiscount = Math.min(
+          eligibleSubtotal,
+          Math.max(0, promo.value || 0)
+        );
       } else {
         promoDiscount = 0;
       }
@@ -987,11 +1092,15 @@ export default function Pos() {
         if (promoDiscount > 0) {
           totalDiscount += promoDiscount;
         }
-        applied.push({ id: promo.id, name: promo.name, amount: promoDiscount || overrideSavings });
+        applied.push({
+          id: promo.id,
+          name: promo.name,
+          amount: promoDiscount || overrideSavings,
+        });
         if (!promo.stackable) break;
       }
     }
-    
+
     return { discount: totalDiscount, applied, overrides };
   }, [cart, promotions, selectedCustomer, selectedEmployee]);
 
@@ -1005,16 +1114,23 @@ export default function Pos() {
     () =>
       cart.reduce((sum, item, idx) => {
         const effectivePrice =
-          promotionOverrides && promotionOverrides[idx]?.targetPrice !== undefined
+          promotionOverrides &&
+          promotionOverrides[idx]?.targetPrice !== undefined
             ? Number(promotionOverrides[idx].targetPrice)
             : Number(item.UnitPrice);
         const qty = Number(item.Quantity) || 0;
         const gross = effectivePrice * qty;
         let lineDisc = 0;
         if (item.DiscountType === "amount") {
-          lineDisc = Math.min(gross, Math.max(0, Number(item.DiscountValue) || 0));
+          lineDisc = Math.min(
+            gross,
+            Math.max(0, Number(item.DiscountValue) || 0)
+          );
         } else if (item.DiscountType === "percent") {
-          const pct = Math.max(0, Math.min(100, Number(item.DiscountValue) || 0));
+          const pct = Math.max(
+            0,
+            Math.min(100, Number(item.DiscountValue) || 0)
+          );
           lineDisc = (gross * pct) / 100;
         }
         const netWithTax = Math.max(0, gross - lineDisc);
@@ -1046,7 +1162,10 @@ export default function Pos() {
       const gross = effectivePrice * qty;
       let lineDisc = 0;
       if (item.DiscountType === "amount") {
-        lineDisc = Math.min(gross, Math.max(0, Number(item.DiscountValue) || 0));
+        lineDisc = Math.min(
+          gross,
+          Math.max(0, Number(item.DiscountValue) || 0)
+        );
       } else if (item.DiscountType === "percent") {
         const pct = Math.max(0, Math.min(100, Number(item.DiscountValue) || 0));
         lineDisc = (gross * pct) / 100;
@@ -1065,7 +1184,10 @@ export default function Pos() {
       const gross = effectivePrice * qty;
       let lineDisc = 0;
       if (item.DiscountType === "amount") {
-        lineDisc = Math.min(gross, Math.max(0, Number(item.DiscountValue) || 0));
+        lineDisc = Math.min(
+          gross,
+          Math.max(0, Number(item.DiscountValue) || 0)
+        );
       } else if (item.DiscountType === "percent") {
         const pct = Math.max(0, Math.min(100, Number(item.DiscountValue) || 0));
         lineDisc = (gross * pct) / 100;
@@ -1081,8 +1203,12 @@ export default function Pos() {
     }, 0);
   }, [cart, priceIncludesTax, promotionOverrides]);
 
-  const finalTotal = Math.max(subtotal - globalDiscountAmount - promotionDiscountAmount + taxTotal, 0);
-  const totalDiscounts = lineDiscountTotal + globalDiscountAmount + promotionDiscountAmount;
+  const finalTotal = Math.max(
+    subtotal - globalDiscountAmount - promotionDiscountAmount + taxTotal,
+    0
+  );
+  const totalDiscounts =
+    lineDiscountTotal + globalDiscountAmount + promotionDiscountAmount;
 
   const getReceiptPrefs = () => {
     const defaults = {
@@ -1106,12 +1232,15 @@ export default function Pos() {
       fontScale: 1,
       lineSpacing: "normal",
     };
-    const widthPx = defaultSize === "57mm" ? 240 : defaultSize === "80mm" ? 320 : 720;
+    const widthPx =
+      defaultSize === "57mm" ? 240 : defaultSize === "80mm" ? 320 : 720;
     const fontSize = 14 * (sizeCfg.fontScale || 1);
     const lineHeight = sizeCfg.lineSpacing === "compact" ? 1.2 : 1.45;
     const itemsRows = cart
       .map((item) => {
-        const lineTotal = item.__lineParts?.total ?? Number(item.UnitPrice) * Number(item.Quantity);
+        const lineTotal =
+          item.__lineParts?.total ??
+          Number(item.UnitPrice) * Number(item.Quantity);
         const tax = item.__lineParts?.tax ?? 0;
         const discount =
           item.DiscountType === "amount"
@@ -1123,9 +1252,21 @@ export default function Pos() {
           <div class="row">
             <span class="name">${item.ProductName || ""}</span>
             <span class="qty">${Number(item.Quantity) || 0}</span>
-            <span class="price">${currencyFormatter.format(item.UnitPrice || 0)}</span>
-            ${sizeCfg.showTax ? `<span class="tax">${currencyFormatter.format(tax)}</span>` : ""}
-            ${sizeCfg.showDiscount ? `<span class="disc">${currencyFormatter.format(discount)}</span>` : ""}
+            <span class="price">${currencyFormatter.format(
+              item.UnitPrice || 0
+            )}</span>
+            ${
+              sizeCfg.showTax
+                ? `<span class="tax">${currencyFormatter.format(tax)}</span>`
+                : ""
+            }
+            ${
+              sizeCfg.showDiscount
+                ? `<span class="disc">${currencyFormatter.format(
+                    discount
+                  )}</span>`
+                : ""
+            }
             <span class="total">${currencyFormatter.format(lineTotal)}</span>
           </div>`;
       })
@@ -1138,33 +1279,44 @@ export default function Pos() {
         .header { text-align:center; margin-bottom:6px; }
         .logo { font-weight:800; margin-bottom:4px; }
         .row.head { font-weight:700; border-bottom:1px dashed #000; padding-bottom:4px; }
-        .row { display:grid; grid-template-columns:${sizeCfg.showTax || sizeCfg.showDiscount ? "2fr 0.6fr 1fr 0.8fr 0.8fr 1fr" : "2fr 0.6fr 1fr 1fr"}; gap:4px; margin:2px 0; }
+        .row { display:grid; grid-template-columns:${
+          sizeCfg.showTax || sizeCfg.showDiscount
+            ? "2fr 0.6fr 1fr 0.8fr 0.8fr 1fr"
+            : "2fr 0.6fr 1fr 1fr"
+        }; gap:4px; margin:2px 0; }
         .row span { text-align:right; }
         .row .name { text-align:left; }
-        .promo-line { display:flex; justify-content:space-between; margin:2px 0; padding-left:12px; font-size:${fontSize - 1}px; }
+        .promo-line { display:flex; justify-content:space-between; margin:2px 0; padding-left:12px; font-size:${
+          fontSize - 1
+        }px; }
         .totals { border-top:1px dashed #000; margin-top:6px; padding-top:4px; }
         .totals .row { grid-template-columns: 1fr 1fr; }
         .footer { text-align:center; margin-top:8px; }
       </style>
     `;
 
-    const taxLine = sizeCfg.showTax ? `<div class="row"><span>Tax</span><span>${currencyFormatter.format(taxTotal)}</span></div>` : "";
+    const taxLine = sizeCfg.showTax
+      ? `<div class="row"><span>Tax</span><span>${currencyFormatter.format(
+          taxTotal
+        )}</span></div>`
+      : "";
     const discountLine =
       sizeCfg.showDiscount && totalDiscounts > 0
-        ? `<div class="row"><span>Discount</span><span>-${currencyFormatter.format(totalDiscounts)}</span></div>`
+        ? `<div class="row"><span>Discount</span><span>-${currencyFormatter.format(
+            totalDiscounts
+          )}</span></div>`
         : "";
 
-    const promosLine =
-      appliedPromotions.length
-        ? appliedPromotions
-            .map(
-              (p) =>
-                `<div class="promo-line"><span>Promo: ${p.name || "Promotion"}</span><span>-${currencyFormatter.format(
-                  p.amount
-                )}</span></div>`
-            )
-            .join("")
-        : "";
+    const promosLine = appliedPromotions.length
+      ? appliedPromotions
+          .map(
+            (p) =>
+              `<div class="promo-line"><span>Promo: ${
+                p.name || "Promotion"
+              }</span><span>-${currencyFormatter.format(p.amount)}</span></div>`
+          )
+          .join("")
+      : "";
 
     return `
       ${styles}
@@ -1186,12 +1338,20 @@ export default function Pos() {
         ${itemsRows}
         ${promosLine}
         <div class="totals">
-          <div class="row"><span>Subtotal</span><span>${currencyFormatter.format(subtotal)}</span></div>
+          <div class="row"><span>Subtotal</span><span>${currencyFormatter.format(
+            subtotal
+          )}</span></div>
           ${taxLine}
           ${discountLine}
-          <div class="row" style="font-weight:800;"><span>Total</span><span>${currencyFormatter.format(finalTotal)}</span></div>
+          <div class="row" style="font-weight:800;"><span>Total</span><span>${currencyFormatter.format(
+            finalTotal
+          )}</span></div>
         </div>
-        ${sizeCfg.footerText ? `<div class="footer">${sizeCfg.footerText}</div>` : ""}
+        ${
+          sizeCfg.footerText
+            ? `<div class="footer">${sizeCfg.footerText}</div>`
+            : ""
+        }
       </div>
     `;
   };
@@ -1232,9 +1392,14 @@ export default function Pos() {
           data: html,
         }),
       })
-        .then(() => setStatus({ type: "success", message: "Print job sent to agent." }))
+        .then(() =>
+          setStatus({ type: "success", message: "Print job sent to agent." })
+        )
         .catch(() => {
-          setStatus({ type: "error", message: "Print agent unreachable. Using browser print." });
+          setStatus({
+            type: "error",
+            message: "Print agent unreachable. Using browser print.",
+          });
           const printWindow = window.open("", "print-receipt");
           if (!printWindow) return;
           printWindow.document.write(html);
@@ -1252,7 +1417,14 @@ export default function Pos() {
     }
   };
 
-  const handleQzPrint = async ({ html, printerName, qzScriptUrl, cert, key, signatureAlgorithm }) => {
+  const handleQzPrint = async ({
+    html,
+    printerName,
+    qzScriptUrl,
+    cert,
+    key,
+    signatureAlgorithm,
+  }) => {
     try {
       // Use the print service with fallback to browser print
       const result = await printWithFallback(html, {
@@ -1265,11 +1437,14 @@ export default function Pos() {
           signatureAlgorithm: signatureAlgorithm || "SHA512",
         },
       });
-      
+
       console.log("Print job sent successfully:", result);
       const methodLabel =
-        result?.method === "qz" ? "QZ Tray" : (result?.method || "browser");
-      setStatus({ type: "success", message: `Receipt printed via ${methodLabel}.` });
+        result?.method === "qz" ? "QZ Tray" : result?.method || "browser";
+      setStatus({
+        type: "success",
+        message: `Receipt printed via ${methodLabel}.`,
+      });
     } catch (err) {
       console.warn("Print failed:", err);
       setStatus({ type: "error", message: `Print failed: ${err?.message}` });
@@ -1348,7 +1523,10 @@ export default function Pos() {
           ? Math.max(0, Math.min(100, Number(item.DiscountValue) || 0))
           : (() => {
               if (gross <= 0) return 0;
-              return Math.max(0, Math.min(100, ((Number(item.DiscountValue) || 0) / gross) * 100));
+              return Math.max(
+                0,
+                Math.min(100, ((Number(item.DiscountValue) || 0) / gross) * 100)
+              );
             })();
       const discountAmount =
         item.DiscountType === "amount"
@@ -1411,12 +1589,19 @@ export default function Pos() {
       return;
     }
     if (!cart.length) {
-      setStatus({ type: "error", message: "Add items before saving the ticket." });
+      setStatus({
+        type: "error",
+        message: "Add items before saving the ticket.",
+      });
       return;
     }
-    const effectiveCustomer = selectedCustomer?.CustomerID || defaultCustomer?.CustomerID || null;
+    const effectiveCustomer =
+      selectedCustomer?.CustomerID || defaultCustomer?.CustomerID || null;
     if (!effectiveCustomer) {
-      setStatus({ type: "error", message: "Select a customer before saving the ticket." });
+      setStatus({
+        type: "error",
+        message: "Select a customer before saving the ticket.",
+      });
       setCustomerModal(true);
       return;
     }
@@ -1469,7 +1654,9 @@ export default function Pos() {
       if (data.items) {
         setCart(
           data.items.map((item) => {
-            const prod = allProducts.find((p) => getProductId(p) === item.ProductID) || item;
+            const prod =
+              allProducts.find((p) => getProductId(p) === item.ProductID) ||
+              item;
             const tax = computeTaxForProduct(prod);
             return {
               ProductID: item.ProductID,
@@ -1517,7 +1704,10 @@ export default function Pos() {
     const effectiveWarehouseId =
       warehouseId || warehouseRef.current || warehouses[0]?.WarehouseID || null;
     if (!effectiveWarehouseId) {
-      setStatus({ type: "error", message: "Select a warehouse before charging." });
+      setStatus({
+        type: "error",
+        message: "Select a warehouse before charging.",
+      });
       return;
     }
     const effectiveCustomer =
@@ -1527,12 +1717,15 @@ export default function Pos() {
     );
     if (docRequiresCustomer) {
       const hasCustomer = !!effectiveCustomer;
-      const hasName = !!(selectedCustomer?.CustomerName || selectedCustomer?.Name);
+      const hasName = !!(
+        selectedCustomer?.CustomerName || selectedCustomer?.Name
+      );
       const hasRut = !!getCustomerTaxId(selectedCustomer);
       if (!hasCustomer || !hasName || !hasRut) {
         setStatus({
           type: "error",
-          message: "Select a customer with RUT and name for this document type.",
+          message:
+            "Select a customer with RUT and name for this document type.",
         });
         setCustomerModal(true);
         return;
@@ -1540,7 +1733,10 @@ export default function Pos() {
     } else {
       // For tickets/boletas we still require a concrete customer (default)
       if (!effectiveCustomer) {
-        setStatus({ type: "error", message: "Select a customer before charging." });
+        setStatus({
+          type: "error",
+          message: "Select a customer before charging.",
+        });
         setCustomerModal(true);
         return;
       }
@@ -1588,13 +1784,16 @@ export default function Pos() {
   };
 
   const paymentTotal = useMemo(
-    () =>
-      payments.reduce((sum, p) => sum + (Number(p.Amount) || 0), 0),
+    () => payments.reduce((sum, p) => sum + (Number(p.Amount) || 0), 0),
     [payments]
   );
 
   const matchMethodByKeywords = (method, keywords = []) =>
-    keywords.some((kw) => String(method.MethodName || "").toLowerCase().includes(kw));
+    keywords.some((kw) =>
+      String(method.MethodName || "")
+        .toLowerCase()
+        .includes(kw)
+    );
 
   const getMethodIdsByKeywords = (keywords = []) =>
     paymentMethods
@@ -1607,9 +1806,12 @@ export default function Pos() {
     // add common synonyms
     if (name.toLowerCase() === "cash") keywords.push("efectivo");
     if (name.toLowerCase() === "card") keywords.push("tarjeta");
-    if (name.toLowerCase() === "transfer") keywords.push("transferencia", "bank");
+    if (name.toLowerCase() === "transfer")
+      keywords.push("transferencia", "bank");
     if (name.toLowerCase() === "credit") keywords.push("credito", "crédito");
-    const match = paymentMethods.find((m) => matchMethodByKeywords(m, keywords));
+    const match = paymentMethods.find((m) =>
+      matchMethodByKeywords(m, keywords)
+    );
     return match ? match.PaymentMethodID : null;
   };
 
@@ -1623,7 +1825,10 @@ export default function Pos() {
     return Math.max(0, finalTotal - paidExcluding);
   };
 
-  const cashMethodIds = useMemo(() => getMethodIdsByKeywords(["cash", "efectivo"]), [paymentMethods]);
+  const cashMethodIds = useMemo(
+    () => getMethodIdsByKeywords(["cash", "efectivo"]),
+    [paymentMethods]
+  );
   const isCashMethod = (methodOrId) => {
     if (!methodOrId) return false;
     if (typeof methodOrId === "object") {
@@ -1634,14 +1839,18 @@ export default function Pos() {
   const rowIsCash = (idx) => {
     const mid = payments[idx]?.PaymentMethodID;
     if (isCashMethod(mid)) return true;
-    const methodObj = paymentMethods.find((m) => Number(m.PaymentMethodID) === Number(mid));
+    const methodObj = paymentMethods.find(
+      (m) => Number(m.PaymentMethodID) === Number(mid)
+    );
     return isCashMethod(methodObj);
   };
   const paymentRowIsCash = (row) => {
     if (!row) return false;
     const mid = row.PaymentMethodID;
     if (isCashMethod(mid)) return true;
-    const methodObj = paymentMethods.find((m) => Number(m.PaymentMethodID) === Number(mid));
+    const methodObj = paymentMethods.find(
+      (m) => Number(m.PaymentMethodID) === Number(mid)
+    );
     return isCashMethod(methodObj);
   };
   const primaryCashIndex = useMemo(
@@ -1660,14 +1869,18 @@ export default function Pos() {
   const addPaymentRow = () => {
     const remaining = Math.max(0, finalTotal - paymentTotal);
     let methodId =
-      (lastPaymentMethodId && (!cashUsed || !isCashMethod(lastPaymentMethodId)) ? lastPaymentMethodId : null) ||
+      (lastPaymentMethodId && (!cashUsed || !isCashMethod(lastPaymentMethodId))
+        ? lastPaymentMethodId
+        : null) ||
       payments[payments.length - 1]?.PaymentMethodID ||
       "";
     if (cashUsed && isCashMethod(methodId)) {
       methodId = firstNonCashMethodId || "";
     }
     if (!methodId) {
-      methodId = cashUsed ? firstNonCashMethodId || "" : cashMethodIds[0] || firstNonCashMethodId || "";
+      methodId = cashUsed
+        ? firstNonCashMethodId || ""
+        : cashMethodIds[0] || firstNonCashMethodId || "";
     }
     setPayments((prev) => [
       ...prev,
@@ -1692,7 +1905,9 @@ export default function Pos() {
     setPaymentError("");
     // default to a single cash payment prefilled with remaining
     const cashId = findMethodId("cash") || "";
-    setPayments([{ PaymentMethodID: cashId, Amount: finalTotal, ReferenceNumber: "" }]);
+    setPayments([
+      { PaymentMethodID: cashId, Amount: finalTotal, ReferenceNumber: "" },
+    ]);
     setPaymentModal(true);
     setTimeout(() => {
       if (amountRefs.current[0]) {
@@ -1767,60 +1982,98 @@ export default function Pos() {
             <div>
               {selectedEmployee && (
                 <p className="muted small">
-                  Cashier: {selectedEmployee.FirstName}{" "}
+                  {t("pos.cashier")}: {selectedEmployee.FirstName}{" "}
                   {selectedEmployee.LastName}
                 </p>
               )}
               <p className="muted small">
-                Customer: {selectedCustomer?.CustomerName || "Default Customer"}
+                {t("pos.customerLabel")}:{" "}
+                {selectedCustomer?.CustomerName || t("pos.defaultCustomer")}
               </p>
             </div>
           </div>
           <div style={{ flex: 1 }} />
-          <div className="order-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
-            <button className="btn ghost" onClick={handleClose} title="Back to Dashboard">
-              <span className="sidebar-icon" aria-hidden="true">🏠</span>
-              <span>Dashboard</span>
+          <div
+            className="order-actions"
+            style={{
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              justifyContent: "flex-end",
+              alignItems: "center",
+            }}
+          >
+            <button
+              className="btn ghost"
+              onClick={handleClose}
+              title={t("pos.dashboard")}
+            >
+              <span className="sidebar-icon" aria-hidden="true">
+                🏠
+              </span>
+              <span>{t("pos.dashboard")}</span>
             </button>
-            <button className="btn ghost" onClick={handleLogout} title="Logout">
+            <button
+              className="btn ghost"
+              onClick={handleLogout}
+              title={t("pos.logout")}
+            >
               <span className="sidebar-icon logout-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" role="presentation" focusable="false" width="18" height="18">
-                  <path d="M10.5 4.5a.75.75 0 0 0-.75-.75h-4a2 2 0 0 0-2 2v12.5a2 2 0 0 0 2 2h4a.75.75 0 0 0 .75-.75V17a.75.75 0 1 0-1.5 0v2H6a.5.5 0 0 1-.5-.5V5.75A.5.5 0 0 1 6 5.25h3v2a.75.75 0 0 0 1.5 0z" fill="currentColor" />
-                  <path d="M14.53 8.47a.75.75 0 0 0-1.06 1.06L15.94 12l-2.47 2.47a.75.75 0 1 0 1.06 1.06l3-3a.75.75 0 0 0 0-1.06z" fill="currentColor" />
-                  <path d="M9.25 12a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5H10a.75.75 0 0 1-.75-.75" fill="currentColor" />
+                <svg
+                  viewBox="0 0 24 24"
+                  role="presentation"
+                  focusable="false"
+                  width="18"
+                  height="18"
+                >
+                  <path
+                    d="M10.5 4.5a.75.75 0 0 0-.75-.75h-4a2 2 0 0 0-2 2v12.5a2 2 0 0 0 2 2h4a.75.75 0 0 0 .75-.75V17a.75.75 0 1 0-1.5 0v2H6a.5.5 0 0 1-.5-.5V5.75A.5.5 0 0 1 6 5.25h3v2a.75.75 0 0 0 1.5 0z"
+                    fill="currentColor"
+                  />
+                  <path
+                    d="M14.53 8.47a.75.75 0 0 0-1.06 1.06L15.94 12l-2.47 2.47a.75.75 0 1 0 1.06 1.06l3-3a.75.75 0 0 0 0-1.06z"
+                    fill="currentColor"
+                  />
+                  <path
+                    d="M9.25 12a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5H10a.75.75 0 0 1-.75-.75"
+                    fill="currentColor"
+                  />
                 </svg>
               </span>
-              <span>Logout</span>
+              <span>{t("pos.logout")}</span>
             </button>
-            <button className="btn ghost" onClick={() => setCustomerModal(true)}>
-              {selectedCustomer?.CustomerName || "Default Customer"}
+            <button
+              className="btn ghost"
+              onClick={() => setCustomerModal(true)}
+            >
+              {selectedCustomer?.CustomerName || t("pos.defaultCustomer")}
             </button>
             <button
               className="btn ghost"
               onClick={() => setEmployeeModal(true)}
             >
-              Change Employee
+              {t("pos.changeEmployee")}
             </button>
             <button
               className="btn ghost"
               onClick={parkTicket}
               disabled={!cart.length || documentType !== "TICKET"}
             >
-              Park Ticket
+              {t("pos.parkTicket")}
             </button>
             <button
               className="btn ghost"
               onClick={loadTickets}
               disabled={documentType !== "TICKET"}
             >
-              Load Ticket
+              {t("pos.loadTicket")}
             </button>
           </div>
         </header>
 
         <div className="order-search">
           <input
-            placeholder="Scan barcode / SKU / product name (use TKT-xxxx to load ticket)"
+            placeholder={t("pos.searchPlaceholder")}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             onKeyDown={async (e) => {
@@ -1849,39 +2102,39 @@ export default function Pos() {
                 }
                 const normalize = (value) =>
                   (value ?? "").toString().trim().toLowerCase();
-              const getName = (p) =>
-                p.ProductName ?? p.productName ?? p.Name ?? p.name ?? "";
-              const getSku = (p) => p.SKU ?? p.Sku ?? p.sku ?? "";
-              const getBarcode = (p) =>
-                p.Barcode ?? p.barcode ?? p.barcodeNumber ?? "";
+                const getName = (p) =>
+                  p.ProductName ?? p.productName ?? p.Name ?? p.name ?? "";
+                const getSku = (p) => p.SKU ?? p.Sku ?? p.sku ?? "";
+                const getBarcode = (p) =>
+                  p.Barcode ?? p.barcode ?? p.barcodeNumber ?? "";
 
-              const term = normalize(searchTerm);
-      const match =
-        (highlightIndex >= 0 && searchResults[highlightIndex]) ||
-        searchResults.find((p) =>
-          isProductAvailable(getProductId(p))
-        ) ||
-        allProducts.find(
-          (p) =>
-            isProductAvailable(getProductId(p)) &&
-            (normalize(getSku(p)) === term ||
-              normalize(getBarcode(p)) === term ||
-              normalize(getName(p)) === term)
-        );
-      if (match) {
-        addProductToCart(match);
-        setSearchTerm("");
-        setSearchResults([]);
-        setHighlightIndex(-1);
-      } else {
-        setStatus({
-          type: "error",
-          message: "No matching product found.",
-        });
-      }
-    }
-  }}
-/>
+                const term = normalize(searchTerm);
+                const match =
+                  (highlightIndex >= 0 && searchResults[highlightIndex]) ||
+                  searchResults.find((p) =>
+                    isProductAvailable(getProductId(p))
+                  ) ||
+                  allProducts.find(
+                    (p) =>
+                      isProductAvailable(getProductId(p)) &&
+                      (normalize(getSku(p)) === term ||
+                        normalize(getBarcode(p)) === term ||
+                        normalize(getName(p)) === term)
+                  );
+                if (match) {
+                  addProductToCart(match);
+                  setSearchTerm("");
+                  setSearchResults([]);
+                  setHighlightIndex(-1);
+                } else {
+                  setStatus({
+                    type: "error",
+                    message: t("pos.emptyState"),
+                  });
+                }
+              }
+            }}
+          />
           {searchResults.length > 0 && (
             <ul className="dropdown">
               {searchResults.map((product, idx) => (
@@ -1905,11 +2158,7 @@ export default function Pos() {
         </div>
 
         <div className="order-list">
-          {cart.length === 0 && (
-            <p className="muted">
-              No items yet. Scan or search to add products.
-            </p>
-          )}
+          {cart.length === 0 && <p className="muted">{t("pos.emptyState")}</p>}
           {cart.length > 0 && (
             <div className="order-row order-head">
               <span>Product</span>
@@ -1922,7 +2171,10 @@ export default function Pos() {
             </div>
           )}
           {cart.map((item, idx) => (
-            <div className="order-item order-row" key={`${item.ProductID}-${idx}`}>
+            <div
+              className="order-item order-row"
+              key={`${item.ProductID}-${idx}`}
+            >
               {(() => {
                 const parts = computeLineParts(item, idx);
                 item.__lineParts = parts; // cache for render below
@@ -1944,20 +2196,37 @@ export default function Pos() {
               <div className="price">
                 {promotionOverrides[idx] ? (
                   <>
-                    <div style={{ textDecoration: "line-through", color: "#999", fontSize: 12 }}>
+                    <div
+                      style={{
+                        textDecoration: "line-through",
+                        color: "#999",
+                        fontSize: 12,
+                      }}
+                    >
                       {currencyFormatter.format(item.UnitPrice)}
                     </div>
                     <div style={{ fontWeight: 700 }}>
-                      {currencyFormatter.format(promotionOverrides[idx].targetPrice)}
+                      {currencyFormatter.format(
+                        promotionOverrides[idx].targetPrice
+                      )}
                     </div>
                     <div className="muted small">Promo</div>
                   </>
-                ) : item.ManualOverride && item.OriginalUnitPrice !== undefined ? (
+                ) : item.ManualOverride &&
+                  item.OriginalUnitPrice !== undefined ? (
                   <>
-                    <div style={{ textDecoration: "line-through", color: "#999", fontSize: 12 }}>
+                    <div
+                      style={{
+                        textDecoration: "line-through",
+                        color: "#999",
+                        fontSize: 12,
+                      }}
+                    >
                       {currencyFormatter.format(item.OriginalUnitPrice)}
                     </div>
-                    <div style={{ fontWeight: 700 }}>{currencyFormatter.format(item.UnitPrice)}</div>
+                    <div style={{ fontWeight: 700 }}>
+                      {currencyFormatter.format(item.UnitPrice)}
+                    </div>
                     <div className="muted small">Manual</div>
                   </>
                 ) : (
@@ -1970,7 +2239,9 @@ export default function Pos() {
                   onChange={(e) =>
                     updateLineDiscountType(item.ProductID, e.target.value)
                   }
-                  disabled={Boolean(promotionOverrides[idx]) || item.ManualOverride}
+                  disabled={
+                    Boolean(promotionOverrides[idx]) || item.ManualOverride
+                  }
                   title={
                     promotionOverrides[idx]
                       ? "Line discounts disabled when promo price applies"
@@ -1989,7 +2260,9 @@ export default function Pos() {
                   onChange={(e) =>
                     updateLineDiscountValue(item.ProductID, e.target.value)
                   }
-                  disabled={Boolean(promotionOverrides[idx]) || item.ManualOverride}
+                  disabled={
+                    Boolean(promotionOverrides[idx]) || item.ManualOverride
+                  }
                 />
               </div>
               <div className="tax muted small">
@@ -2000,7 +2273,10 @@ export default function Pos() {
               <div className="price">
                 {currencyFormatter.format(item.__lineParts?.total || 0)}
               </div>
-              <div className="actions" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <div
+                className="actions"
+                style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}
+              >
                 <button
                   className="btn ghost small"
                   type="button"
@@ -2044,9 +2320,15 @@ export default function Pos() {
                 background: "rgba(0,0,0,0.015)",
               }}
             >
-              <div className="muted small" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <div
+                className="muted small"
+                style={{ display: "flex", flexDirection: "column", gap: 2 }}
+              >
                 {appliedPromotions.map((p) => (
-                  <div key={p.id || p.name} style={{ display: "flex", justifyContent: "space-between" }}>
+                  <div
+                    key={p.id || p.name}
+                    style={{ display: "flex", justifyContent: "space-between" }}
+                  >
                     <span>Promo: {p.name || "Promotion"}</span>
                     <span>-{currencyFormatter.format(p.amount)}</span>
                   </div>
@@ -2059,7 +2341,10 @@ export default function Pos() {
           <div className="pos-footer-row top-controls">
             <div>
               <p>Document</p>
-              <select value={documentType} onChange={(e) => setDocumentType(e.target.value)}>
+              <select
+                value={documentType}
+                onChange={(e) => setDocumentType(e.target.value)}
+              >
                 {documentTypeOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
@@ -2099,7 +2384,11 @@ export default function Pos() {
               <p>Price list</p>
               <select
                 value={activePriceListId || ""}
-                onChange={(e) => setActivePriceListId(e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) =>
+                  setActivePriceListId(
+                    e.target.value ? Number(e.target.value) : null
+                  )
+                }
               >
                 <option value="">Base price</option>
                 {priceLists.map((pl) => (
@@ -2116,7 +2405,10 @@ export default function Pos() {
                   <select
                     value={discountType}
                     onChange={(e) => setDiscountType(e.target.value)}
-                    disabled={Object.keys(promotionOverrides).length > 0 || cart.some((c) => c.ManualOverride)}
+                    disabled={
+                      Object.keys(promotionOverrides).length > 0 ||
+                      cart.some((c) => c.ManualOverride)
+                    }
                     title={
                       Object.keys(promotionOverrides).length > 0
                         ? "Global discount disabled when promo price applies"
@@ -2136,7 +2428,10 @@ export default function Pos() {
                     value={discountValue}
                     onChange={(e) => setDiscountValue(e.target.value)}
                     min="0"
-                    disabled={Object.keys(promotionOverrides).length > 0 || cart.some((c) => c.ManualOverride)}
+                    disabled={
+                      Object.keys(promotionOverrides).length > 0 ||
+                      cart.some((c) => c.ManualOverride)
+                    }
                     title={
                       Object.keys(promotionOverrides).length > 0
                         ? "Global discount disabled when promo price applies"
@@ -2161,10 +2456,7 @@ export default function Pos() {
             </div>
             <div>
               <p>Discount</p>
-              <strong>
-                -
-                {currencyFormatter.format(totalDiscounts)}
-              </strong>
+              <strong>-{currencyFormatter.format(totalDiscounts)}</strong>
             </div>
             {appliedPromotions.length > 0 && (
               <div>
@@ -2172,7 +2464,8 @@ export default function Pos() {
                 <div className="muted small">
                   {appliedPromotions.map((p) => (
                     <div key={p.id || p.name}>
-                      {p.name || "Promotion"}: -{currencyFormatter.format(p.amount)}
+                      {p.name || "Promotion"}: -
+                      {currencyFormatter.format(p.amount)}
                     </div>
                   ))}
                 </div>
@@ -2183,7 +2476,11 @@ export default function Pos() {
               <strong>{currencyFormatter.format(finalTotal)}</strong>
             </div>
             <div className="order-actions charge-area">
-              <button className="btn ghost" onClick={handlePrintReceipt} disabled={!cart.length || checkoutLoading}>
+              <button
+                className="btn ghost"
+                onClick={handlePrintReceipt}
+                disabled={!cart.length || checkoutLoading}
+              >
                 Print receipt
               </button>
               {documentType === "TICKET" ? (
@@ -2319,7 +2616,9 @@ export default function Pos() {
                         key={getCategoryKey(category.ProductCategoryID)}
                         className="category"
                         onClick={() =>
-                          setActiveCategoryId(getCategoryKey(category.ProductCategoryID))
+                          setActiveCategoryId(
+                            getCategoryKey(category.ProductCategoryID)
+                          )
                         }
                       >
                         {category.CategoryName}
@@ -2479,19 +2778,28 @@ export default function Pos() {
         <div className="modal">
           <div className="modal-content payment-modal">
             <h3>Charge</h3>
-            <p className="muted small">Add one or more payments. Total due: {currencyFormatter.format(finalTotal)}.</p>
+            <p className="muted small">
+              Add one or more payments. Total due:{" "}
+              {currencyFormatter.format(finalTotal)}.
+            </p>
             {paymentError && <p className="status error">{paymentError}</p>}
             <div className="payment-modes">
               <button
-                className={`pay-mode ${rowIsCash(focusedPaymentIndex) ? "active" : ""}`}
+                className={`pay-mode ${
+                  rowIsCash(focusedPaymentIndex) ? "active" : ""
+                }`}
                 type="button"
                 onClick={() => {
                   if (!rowIsCash(focusedPaymentIndex) && cashUsed) return;
-                  const cashId = cashMethodIds[0] || payments[focusedPaymentIndex]?.PaymentMethodID;
+                  const cashId =
+                    cashMethodIds[0] ||
+                    payments[focusedPaymentIndex]?.PaymentMethodID;
                   setLastPaymentMethodId(cashId);
                   setPayments((prev) =>
                     prev.map((p, idx) =>
-                      idx === focusedPaymentIndex ? { ...p, PaymentMethodID: cashId } : p
+                      idx === focusedPaymentIndex
+                        ? { ...p, PaymentMethodID: cashId }
+                        : p
                     )
                   );
                   const targetRef = amountRefs.current[focusedPaymentIndex];
@@ -2504,15 +2812,24 @@ export default function Pos() {
                 💵 Cash
               </button>
               <button
-                className={`pay-mode ${payments[focusedPaymentIndex]?.PaymentMethodID === findMethodId("card") ? "active" : ""}`}
+                className={`pay-mode ${
+                  payments[focusedPaymentIndex]?.PaymentMethodID ===
+                  findMethodId("card")
+                    ? "active"
+                    : ""
+                }`}
                 type="button"
                 onClick={() => {
-                  const cardId = findMethodId("card") || payments[focusedPaymentIndex]?.PaymentMethodID;
+                  const cardId =
+                    findMethodId("card") ||
+                    payments[focusedPaymentIndex]?.PaymentMethodID;
                   const remaining = remainingDue(focusedPaymentIndex);
                   setLastPaymentMethodId(cardId);
                   setPayments((prev) =>
                     prev.map((p, idx) =>
-                      idx === focusedPaymentIndex ? { ...p, PaymentMethodID: cardId, Amount: remaining } : p
+                      idx === focusedPaymentIndex
+                        ? { ...p, PaymentMethodID: cardId, Amount: remaining }
+                        : p
                     )
                   );
                   const targetRef = amountRefs.current[focusedPaymentIndex];
@@ -2525,15 +2842,24 @@ export default function Pos() {
                 💳 Card
               </button>
               <button
-                className={`pay-mode ${payments[focusedPaymentIndex]?.PaymentMethodID === findMethodId("transfer") ? "active" : ""}`}
+                className={`pay-mode ${
+                  payments[focusedPaymentIndex]?.PaymentMethodID ===
+                  findMethodId("transfer")
+                    ? "active"
+                    : ""
+                }`}
                 type="button"
                 onClick={() => {
-                  const trId = findMethodId("transfer") || payments[focusedPaymentIndex]?.PaymentMethodID;
+                  const trId =
+                    findMethodId("transfer") ||
+                    payments[focusedPaymentIndex]?.PaymentMethodID;
                   const remaining = remainingDue(focusedPaymentIndex);
                   setLastPaymentMethodId(trId);
                   setPayments((prev) =>
                     prev.map((p, idx) =>
-                      idx === focusedPaymentIndex ? { ...p, PaymentMethodID: trId, Amount: remaining } : p
+                      idx === focusedPaymentIndex
+                        ? { ...p, PaymentMethodID: trId, Amount: remaining }
+                        : p
                     )
                   );
                   const targetRef = amountRefs.current[focusedPaymentIndex];
@@ -2546,14 +2872,23 @@ export default function Pos() {
                 🏦 Transfer
               </button>
               <button
-                className={`pay-mode ${payments[focusedPaymentIndex]?.PaymentMethodID === findMethodId("credit") ? "active" : ""}`}
+                className={`pay-mode ${
+                  payments[focusedPaymentIndex]?.PaymentMethodID ===
+                  findMethodId("credit")
+                    ? "active"
+                    : ""
+                }`}
                 type="button"
                 onClick={() => {
-                  const creditId = findMethodId("credit") || payments[focusedPaymentIndex]?.PaymentMethodID;
+                  const creditId =
+                    findMethodId("credit") ||
+                    payments[focusedPaymentIndex]?.PaymentMethodID;
                   setLastPaymentMethodId(creditId);
                   setPayments((prev) =>
                     prev.map((p, idx) =>
-                      idx === focusedPaymentIndex ? { ...p, PaymentMethodID: creditId } : p
+                      idx === focusedPaymentIndex
+                        ? { ...p, PaymentMethodID: creditId }
+                        : p
                     )
                   );
                   const targetRef = amountRefs.current[focusedPaymentIndex];
@@ -2580,7 +2915,8 @@ export default function Pos() {
                     value={p.PaymentMethodID}
                     onChange={(e) =>
                       setPayments((prev) => {
-                        const val = e.target.value === "" ? "" : Number(e.target.value);
+                        const val =
+                          e.target.value === "" ? "" : Number(e.target.value);
                         return prev.map((row, i) =>
                           i === idx ? { ...row, PaymentMethodID: val } : row
                         );
@@ -2594,10 +2930,17 @@ export default function Pos() {
                         const isCash = isCashMethod(m);
                         if (!isCash) return true;
                         // cash option: show only if no cash yet or this row is the cash row
-                        return !cashUsed || primaryCashIndex === idx || rowIsCash(idx);
+                        return (
+                          !cashUsed ||
+                          primaryCashIndex === idx ||
+                          rowIsCash(idx)
+                        );
                       })
                       .map((m) => (
-                        <option key={m.PaymentMethodID} value={m.PaymentMethodID}>
+                        <option
+                          key={m.PaymentMethodID}
+                          value={m.PaymentMethodID}
+                        >
                           {m.MethodName}
                         </option>
                       ))}
@@ -2624,7 +2967,9 @@ export default function Pos() {
                     onChange={(e) =>
                       setPayments((prev) =>
                         prev.map((row, i) =>
-                          i === idx ? { ...row, ReferenceNumber: e.target.value } : row
+                          i === idx
+                            ? { ...row, ReferenceNumber: e.target.value }
+                            : row
                         )
                       )
                     }
@@ -2652,11 +2997,15 @@ export default function Pos() {
                           if (i === lastIndex) return sum;
                           return sum + (Number(row.Amount) || 0);
                         }, 0);
-                        const needed = Math.max(0, finalTotal - paidExcludingLast);
+                        const needed = Math.max(
+                          0,
+                          finalTotal - paidExcludingLast
+                        );
                         const newLastAmount =
                           needed > 0
                             ? needed
-                            : (Number(next[lastIndex].Amount) || 0) + removedAmount;
+                            : (Number(next[lastIndex].Amount) || 0) +
+                              removedAmount;
                         next[lastIndex] = {
                           ...next[lastIndex],
                           Amount: newLastAmount,
@@ -2665,7 +3014,8 @@ export default function Pos() {
                         return next;
                       });
                       setTimeout(() => {
-                        const ref = amountRefs.current[Math.max(0, payments.length - 2)];
+                        const ref =
+                          amountRefs.current[Math.max(0, payments.length - 2)];
                         if (ref) {
                           ref.focus();
                           ref.select();
@@ -2679,18 +3029,35 @@ export default function Pos() {
                 </div>
               ))}
             </div>
-            <div className="list-actions" style={{ justifyContent: "space-between", alignItems: "center" }}>
+            <div
+              className="list-actions"
+              style={{ justifyContent: "space-between", alignItems: "center" }}
+            >
               <div className="muted small">
-                Total payments: {currencyFormatter.format(paymentTotal)} / {currencyFormatter.format(finalTotal)}
+                Total payments: {currencyFormatter.format(paymentTotal)} /{" "}
+                {currencyFormatter.format(finalTotal)}
               </div>
               <div className="list-actions">
-                <button className="btn ghost" type="button" onClick={addPaymentRow}>
+                <button
+                  className="btn ghost"
+                  type="button"
+                  onClick={addPaymentRow}
+                >
                   Add payment
                 </button>
-                <button className="btn ghost" type="button" onClick={() => setPaymentModal(false)}>
+                <button
+                  className="btn ghost"
+                  type="button"
+                  onClick={() => setPaymentModal(false)}
+                >
                   Cancel
                 </button>
-                <button className="btn primary" type="button" onClick={submitPayments} disabled={checkoutLoading}>
+                <button
+                  className="btn primary"
+                  type="button"
+                  onClick={submitPayments}
+                  disabled={checkoutLoading}
+                >
                   {checkoutLoading ? "Processing..." : "Charge"}
                 </button>
               </div>
@@ -2702,11 +3069,14 @@ export default function Pos() {
         <div className="modal">
           <div className="modal-content">
             <h3>Enter PIN</h3>
-            <p className="muted small">Enter the 4-6 digit PIN for the selected employee.</p>
+            <p className="muted small">
+              Enter the 4-6 digit PIN for the selected employee.
+            </p>
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
-                if (!pendingEmployeeRef.current || !pinInput || pinLoading) return;
+                if (!pendingEmployeeRef.current || !pinInput || pinLoading)
+                  return;
                 setPinLoading(true);
                 setPinError("");
                 try {
@@ -2720,7 +3090,8 @@ export default function Pos() {
                   setStatus({ type: "success", message: "Employee switched." });
                 } catch (err) {
                   const message =
-                    err.response?.data?.error || "Invalid PIN. Please try again.";
+                    err.response?.data?.error ||
+                    "Invalid PIN. Please try again.";
                   setPinError(message);
                 } finally {
                   setPinLoading(false);
@@ -2740,26 +3111,29 @@ export default function Pos() {
                 }}
                 autoFocus
               />
-            {pinError && <p className="status error">{pinError}</p>}
-            <div className="form-actions" style={{ justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                className="btn ghost"
-                onClick={() => {
-                  setPinModal(false);
-                  setPinError("");
-                }}
+              {pinError && <p className="status error">{pinError}</p>}
+              <div
+                className="form-actions"
+                style={{ justifyContent: "flex-end" }}
               >
-                Cancel
-              </button>
-              <button
-                className="btn primary"
-                disabled={!pinInput || pinLoading}
-                type="submit"
-              >
-                {pinLoading ? "Verifying..." : "Confirm"}
-              </button>
-            </div>
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={() => {
+                    setPinModal(false);
+                    setPinError("");
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn primary"
+                  disabled={!pinInput || pinLoading}
+                  type="submit"
+                >
+                  {pinLoading ? "Verifying..." : "Confirm"}
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -2769,7 +3143,10 @@ export default function Pos() {
           <div className="modal-content">
             <h3>Override price</h3>
             <p className="muted small">
-              Set a custom unit price for this line. {isAdminUser ? "Admin override" : "Manager PIN required for non-admins."}
+              Set a custom unit price for this line.{" "}
+              {isAdminUser
+                ? "Admin override"
+                : "Manager PIN required for non-admins."}
             </p>
             <label>
               New unit price
@@ -2779,7 +3156,11 @@ export default function Pos() {
                 step="0.01"
                 value={overrideModal.newPrice}
                 onChange={(e) =>
-                  setOverrideModal((prev) => ({ ...prev, newPrice: e.target.value, error: "" }))
+                  setOverrideModal((prev) => ({
+                    ...prev,
+                    newPrice: e.target.value,
+                    error: "",
+                  }))
                 }
               />
             </label>
@@ -2790,7 +3171,11 @@ export default function Pos() {
                   <input
                     value={overrideModal.managerId}
                     onChange={(e) =>
-                      setOverrideModal((prev) => ({ ...prev, managerId: e.target.value, error: "" }))
+                      setOverrideModal((prev) => ({
+                        ...prev,
+                        managerId: e.target.value,
+                        error: "",
+                      }))
                     }
                   />
                 </label>
@@ -2800,24 +3185,45 @@ export default function Pos() {
                     type="password"
                     value={overrideModal.pin}
                     onChange={(e) =>
-                      setOverrideModal((prev) => ({ ...prev, pin: e.target.value, error: "" }))
+                      setOverrideModal((prev) => ({
+                        ...prev,
+                        pin: e.target.value,
+                        error: "",
+                      }))
                     }
                   />
                 </label>
               </div>
             )}
-            {overrideModal.error && <p className="status error">{overrideModal.error}</p>}
-            <div className="form-actions" style={{ justifyContent: "flex-end" }}>
+            {overrideModal.error && (
+              <p className="status error">{overrideModal.error}</p>
+            )}
+            <div
+              className="form-actions"
+              style={{ justifyContent: "flex-end" }}
+            >
               <button
                 className="btn ghost"
                 type="button"
                 onClick={() =>
-                  setOverrideModal({ open: false, productId: null, newPrice: "", managerId: "", pin: "", error: "", idx: null })
+                  setOverrideModal({
+                    open: false,
+                    productId: null,
+                    newPrice: "",
+                    managerId: "",
+                    pin: "",
+                    error: "",
+                    idx: null,
+                  })
                 }
               >
                 Cancel
               </button>
-              <button className="btn primary" type="button" onClick={applyManualOverride}>
+              <button
+                className="btn primary"
+                type="button"
+                onClick={applyManualOverride}
+              >
                 Apply override
               </button>
             </div>

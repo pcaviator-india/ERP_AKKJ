@@ -181,14 +181,16 @@ export default function DashboardLayout() {
               </h2>
               <p className="muted">{t("dashboard.subtitle")}</p>
             </div>
-            <div className="dashboard-shortcuts">
+            <div className="dashboard-shortcuts" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span role="img" aria-label="Language">🌐</span>
               <select
                 className="lang-switch"
                 value={lang}
                 onChange={(e) => setLang(e.target.value)}
+                style={{ width: 70, padding: "6px 8px" }}
               >
-                <option value="en">English</option>
-                <option value="es">Español</option>
+                <option value="en">EN</option>
+                <option value="es">ES</option>
               </select>
             </div>
           </header>

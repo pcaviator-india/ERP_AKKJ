@@ -174,10 +174,11 @@ export default function PromotionCreate() {
     };
     const fetchCustomFields = async () => {
       try {
-        const res = await api.get("/api/product-custom-fields");
+        // API returns [{ id, label, type, visible }]
+        const res = await api.get("/api/custom-fields/product");
         const list = Array.isArray(res.data) ? res.data : res.data?.items || [];
         const names = list
-          .map((f) => f.FieldName || f.Name || f.name)
+          .map((f) => f.label || f.FieldName || f.Name || f.name)
           .filter(Boolean)
           .map((v) => String(v));
         setAvailableCustomFields(names);

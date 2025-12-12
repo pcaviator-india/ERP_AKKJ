@@ -32,8 +32,14 @@ export function ConfigProvider({ children }) {
       const { data } = await api.get("/api/config");
       setConfig(data || {});
     } catch (err) {
-      console.warn("Failed to load config", err);
-      setConfig({});
+      const status = err?.response?.status;
+      if (status === 401 || status === 403) {
+        // No config access; keep defaults without noisy log
+        setConfig({});
+      } else {
+        console.warn("Failed to load config", err);
+        setConfig({});
+      }
     } finally {
       setReady(true);
       setLoading(false);
