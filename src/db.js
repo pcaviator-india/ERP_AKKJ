@@ -5,11 +5,11 @@ require("dotenv").config();
 const host = process.env.MYSQL_HOST || process.env.DB_SERVER || "localhost";
 const port = process.env.MYSQL_PORT ? Number(process.env.MYSQL_PORT) : 3306;
 const user = process.env.MYSQL_USER || process.env.DB_USER || "root";
-const password =
-  process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD || "";
+const password = process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD || "";
 const database =
   process.env.MYSQL_DATABASE || process.env.DB_DATABASE || "erp_akkj";
 
+const useSsl = process.env.MYSQL_SSL === "true";
 const pool = mysql.createPool({
   host,
   port,
@@ -19,6 +19,7 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
+  ssl: useSsl ? { rejectUnauthorized: false } : undefined,
 });
 
 module.exports = {
