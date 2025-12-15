@@ -102,6 +102,60 @@ export default function Pos() {
   const [ticketModal, setTicketModal] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const resultRefs = useRef([]);
+  const searchInputRef = useRef(null);
+  const skipFocusRef = useRef(true);
+  const prevDocRef = useRef(null);
+  const prevWarehouseRef = useRef(null);
+  const prevPriceListRef = useRef(null);
+  const prevModalsRef = useRef({
+    customer: false,
+    employee: false,
+    ticket: false,
+    pin: false,
+    payment: false,
+  });
+
+  const focusSearch = () => {
+    if (searchInputRef.current) {
+      searchInputRef.current.focus();
+      searchInputRef.current.select?.();
+    }
+  };
+
+  const focusSearchSoon = () => {
+    setTimeout(focusSearch, 0);
+  };
+  const focusSearchDelayed = (ms = 200) => {
+    setTimeout(focusSearch, ms);
+  };
+
+  const handleSurfaceMouseDown = (e) => {
+    const target = e.target;
+    if (
+      target.closest(
+        "input, select, button, textarea, [contenteditable], .dropdown, .modal, .category, .product-btn"
+      )
+    ) {
+      return;
+    }
+    focusSearchSoon();
+  };
+
+  useEffect(() => {
+    const handler = (e) => {
+      const target = e.target;
+      if (
+        target.closest(
+          "input, select, button, textarea, [contenteditable], .dropdown, .modal, .category, .product-btn"
+        )
+      ) {
+        return;
+      }
+      focusSearchSoon();
+    };
+    document.addEventListener("mousedown", handler, true);
+    return () => document.removeEventListener("mousedown", handler, true);
+  }, []);
   const [dismissedTicketIds, setDismissedTicketIds] = useState([]);
   const [loadedTicketId, setLoadedTicketId] = useState(null);
   const [categoryCollapsed, setCategoryCollapsed] = useState(false);
@@ -809,6 +863,7 @@ export default function Pos() {
     });
     setSearchTerm("");
     setSearchResults([]);
+    focusSearchSoon();
   };
 
   const updateQuantity = (id, delta) => {
@@ -1958,51 +2013,82 @@ export default function Pos() {
 
   const resetCategoryView = () => setActiveCategoryId(null);
 
+  useEffect(() => {
+    focusSearchSoon();
+  }, []);
+
+  useEffect(() => {
+    if (skipFocusRef.current) {
+      skipFocusRef.current = false;
+      return;
+    }
+    focusSearchSoon();
+  }, [
+    selectedCustomer,
+    selectedEmployee,
+    documentType,
+    activePriceListId,
+    warehouseId,
+    loadedTicketId,
+  ]);
+
+  useEffect(() => {
+    const prev = prevModalsRef.current;
+    if (prev.customer && !customerModal) focusSearchSoon();
+    if (prev.employee && !employeeModal) focusSearchSoon();
+    if (prev.ticket && !ticketModal) focusSearchSoon();
+    if (prev.pin && !pinModal) focusSearchSoon();
+    if (prev.payment && !paymentModal) focusSearchSoon();
+    prevModalsRef.current = {
+      customer: customerModal,
+      employee: employeeModal,
+      ticket: ticketModal,
+      pin: pinModal,
+      payment: paymentModal,
+    };
+  }, [customerModal, employeeModal, ticketModal, pinModal, paymentModal]);
+
+  useEffect(() => {
+    focusSearchSoon();
+  }, [activeCategoryId, categoryCollapsed]);
+  const MIN_MAIN_PERCENT = 70;
+  const mainPercent = Math.max(MIN_MAIN_PERCENT, 100 - categoryWidth);
+  const sidePercent = Math.max(0, 100 - mainPercent);
+
   return (
     <div
       ref={gridRef}
       className="pos-grid"
+      onMouseDown={handleSurfaceMouseDown}
       style={{
         gridTemplateColumns: categoryCollapsed
           ? "minmax(0, 1fr) 44px"
-          : `minmax(520px, calc(${
-              100 - categoryWidth
-            }% - 4px)) 8px minmax(280px, ${categoryWidth}%)`,
+          : `minmax(520px, ${mainPercent}%) 8px minmax(280px, ${sidePercent}%)`,
       }}
     >
       <section className="order-panel card">
         <header className="order-header">
-          <div className="pos-header-meta">
+          <div className="pos-header-top">
             <div className="company-brand">
               {hasLogo && (
                 <img src={logoSource} alt="Company" className="company-logo" />
               )}
               <strong className="company-name">{companyLabel}</strong>
             </div>
-            <div>
+            <div className="pos-header-details">
               {selectedEmployee && (
-                <p className="muted small">
+                <span className="muted small">
                   {t("pos.cashier")}: {selectedEmployee.FirstName}{" "}
                   {selectedEmployee.LastName}
-                </p>
+                </span>
               )}
-              <p className="muted small">
+              <span className="muted small">
                 {t("pos.customerLabel")}:{" "}
                 {selectedCustomer?.CustomerName || t("pos.defaultCustomer")}
-              </p>
+              </span>
             </div>
           </div>
-          <div style={{ flex: 1 }} />
-          <div
-            className="order-actions"
-            style={{
-              display: "flex",
-              gap: 8,
-              flexWrap: "wrap",
-              justifyContent: "flex-end",
-              alignItems: "center",
-            }}
-          >
+          <div className="order-actions">
             <button
               className="btn ghost"
               onClick={handleClose}
@@ -2045,12 +2131,14 @@ export default function Pos() {
             <button
               className="btn ghost"
               onClick={() => setCustomerModal(true)}
+              onBlur={focusSearchSoon}
             >
               {selectedCustomer?.CustomerName || t("pos.defaultCustomer")}
             </button>
             <button
               className="btn ghost"
               onClick={() => setEmployeeModal(true)}
+              onBlur={focusSearchSoon}
             >
               {t("pos.changeEmployee")}
             </button>
@@ -2065,14 +2153,27 @@ export default function Pos() {
               className="btn ghost"
               onClick={loadTickets}
               disabled={documentType !== "TICKET"}
+              onBlur={focusSearchSoon}
             >
               {t("pos.loadTicket")}
+            </button>
+            <button
+              className="btn ghost"
+              onClick={() => {
+                setCart([]);
+                setStatus({ type: "", message: "" });
+                focusSearchSoon();
+              }}
+              disabled={!cart.length}
+            >
+              Clear all
             </button>
           </div>
         </header>
 
         <div className="order-search">
           <input
+            ref={searchInputRef}
             placeholder={t("pos.searchPlaceholder")}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -2260,6 +2361,14 @@ export default function Pos() {
                   onChange={(e) =>
                     updateLineDiscountValue(item.ProductID, e.target.value)
                   }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (searchInputRef.current) {
+                        searchInputRef.current.focus();
+                      }
+                    }
+                  }}
                   disabled={
                     Boolean(promotionOverrides[idx]) || item.ManualOverride
                   }
@@ -2343,7 +2452,11 @@ export default function Pos() {
               <p>Document</p>
               <select
                 value={documentType}
-                onChange={(e) => setDocumentType(e.target.value)}
+                onChange={(e) => {
+                  setDocumentType(e.target.value);
+                  focusSearchSoon();
+                }}
+                onBlur={() => focusSearchDelayed(100)}
               >
                 {documentTypeOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -2366,11 +2479,14 @@ export default function Pos() {
                     });
                     // reset select to previous value
                     setWarehouseId(warehouseRef.current || "");
+                    focusSearchSoon();
                     return;
                   }
                   setWarehouseId(newId);
                   warehouseRef.current = newId;
+                  focusSearchSoon();
                 }}
+                onBlur={() => focusSearchDelayed(100)}
                 disabled={cart.length > 0}
               >
                 {warehouses.map((w) => (
@@ -2384,11 +2500,13 @@ export default function Pos() {
               <p>Price list</p>
               <select
                 value={activePriceListId || ""}
-                onChange={(e) =>
+                onChange={(e) => {
                   setActivePriceListId(
                     e.target.value ? Number(e.target.value) : null
-                  )
-                }
+                  );
+                  focusSearchSoon();
+                }}
+                onBlur={() => focusSearchDelayed(100)}
               >
                 <option value="">Base price</option>
                 {priceLists.map((pl) => (
@@ -2425,14 +2543,22 @@ export default function Pos() {
                   Value
                   <input
                     type="number"
-                    value={discountValue}
-                    onChange={(e) => setDiscountValue(e.target.value)}
-                    min="0"
-                    disabled={
-                      Object.keys(promotionOverrides).length > 0 ||
-                      cart.some((c) => c.ManualOverride)
+                  value={discountValue}
+                  onChange={(e) => setDiscountValue(e.target.value)}
+                  min="0"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (searchInputRef.current) {
+                        searchInputRef.current.focus();
+                      }
                     }
-                    title={
+                  }}
+                  disabled={
+                    Object.keys(promotionOverrides).length > 0 ||
+                    cart.some((c) => c.ManualOverride)
+                  }
+                  title={
                       Object.keys(promotionOverrides).length > 0
                         ? "Global discount disabled when promo price applies"
                         : cart.some((c) => c.ManualOverride)
@@ -2615,11 +2741,10 @@ export default function Pos() {
                       <button
                         key={getCategoryKey(category.ProductCategoryID)}
                         className="category"
-                        onClick={() =>
-                          setActiveCategoryId(
-                            getCategoryKey(category.ProductCategoryID)
-                          )
-                        }
+        onClick={() => {
+          setActiveCategoryId(getCategoryKey(category.ProductCategoryID));
+          focusSearchSoon();
+        }}
                       >
                         {category.CategoryName}
                       </button>
@@ -2658,7 +2783,10 @@ export default function Pos() {
         )}
         <button
           className={`category-toggle ${categoryCollapsed ? "show" : "hide"}`}
-          onClick={() => setCategoryCollapsed((prev) => !prev)}
+        onClick={() => {
+          setCategoryCollapsed((prev) => !prev);
+          focusSearchSoon();
+        }}
           aria-label={categoryCollapsed ? "Show categories" : "Hide categories"}
         >
           {categoryCollapsed ? ">" : "<"}
@@ -2728,6 +2856,7 @@ export default function Pos() {
                       setSelectedCustomer(customer);
                       setCustomerModal(false);
                       setCustomerLookup("");
+                      focusSearchSoon();
                     }}
                   >
                     {customer.CustomerName} - {customer.Email}
@@ -2735,14 +2864,17 @@ export default function Pos() {
                 </li>
               ))}
             </ul>
-            <button
-              className="btn ghost"
-              onClick={() => setCustomerModal(false)}
-            >
-              Close
-            </button>
+              <button
+                className="btn ghost"
+                onClick={() => {
+                  setCustomerModal(false);
+                  focusSearchSoon();
+                }}
+              >
+                Close
+              </button>
+            </div>
           </div>
-        </div>
       )}
 
       {employeeModal && (
@@ -2765,14 +2897,17 @@ export default function Pos() {
                 </li>
               ))}
             </ul>
-            <button
-              className="btn ghost"
-              onClick={() => setEmployeeModal(false)}
-            >
-              Close
-            </button>
+              <button
+                className="btn ghost"
+                onClick={() => {
+                  setEmployeeModal(false);
+                  focusSearchSoon();
+                }}
+              >
+                Close
+              </button>
+            </div>
           </div>
-        </div>
       )}
       {paymentModal && (
         <div className="modal">

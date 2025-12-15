@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
@@ -9,7 +9,7 @@ const navItems = [
   { labelKey: "nav.company", path: "/company/setup", icon: "\u{1F3E2}", perm: "config.manage" },
   { labelKey: "nav.taxRates", path: "/tax-rates", icon: "\u{0025}", perm: "config.manage" },
   { labelKey: "nav.employees", path: "/employees/onboarding", icon: "\u{1F465}", perm: "employees.manage" },
-  { labelKey: "nav.customers", path: "/customers", icon: "\u{1F465}", perm: "customers.manage" },
+  { labelKey: "nav.customers", path: "/customers", icon: "\u{1F91D}", perm: "customers.manage" }, // handshake to distinguish from employees
   { labelKey: "nav.roles", path: "/roles", icon: "\u{1F510}", perm: "roles.manage" },
   { labelKey: "nav.promotions", path: "/promotions", icon: "\u{1F381}", perm: "config.manage" },
   {
@@ -56,8 +56,19 @@ const navItems = [
   },
 ];
 
+const SIDEBAR_STORAGE_KEY = "akkj-sidebar-collapsed";
+
 export default function DashboardLayout() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(SIDEBAR_STORAGE_KEY, String(collapsed));
+    }
+  }, [collapsed]);
   const { user, company, permissions, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -142,14 +153,14 @@ export default function DashboardLayout() {
                 key={item.path}
                 to={item.path}
                 end={item.path === "/dashboard"}
-                className={({ isActive }) =>
-                  `sidebar-link ${isActive ? "active" : ""}`
-                }
-              >
-                <span className="sidebar-icon">{item.icon || "•"}</span>
-                {!collapsed && <span>{t(item.labelKey)}</span>}
-              </NavLink>
-            )
+              className={({ isActive }) =>
+                `sidebar-link ${isActive ? "active" : ""}`
+              }
+            >
+              <span className="sidebar-icon">{item.icon || "?"}</span>
+              <span className="sidebar-label">{t(item.labelKey)}</span>
+            </NavLink>
+          )
           )}
         </nav>
         <div className="sidebar-footer">
@@ -168,7 +179,7 @@ export default function DashboardLayout() {
                 <path d="M9.25 12a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5H10a.75.75 0 0 1-.75-.75" fill="currentColor" />
               </svg>
             </span>
-            {!collapsed && <span>Logout</span>}
+            <span className="sidebar-label">Logout</span>
           </button>
         </div>
       </aside>
@@ -182,7 +193,7 @@ export default function DashboardLayout() {
               <p className="muted">{t("dashboard.subtitle")}</p>
             </div>
             <div className="dashboard-shortcuts" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span role="img" aria-label="Language">🌐</span>
+              <span role="img" aria-label="Language">??</span>
               <select
                 className="lang-switch"
                 value={lang}
@@ -215,11 +226,11 @@ function SidebarGroup({ label, labelKey, childrenItems, open, onToggle, t, icon,
   return (
     <div className="sidebar-group">
       <button type="button" className="sidebar-group-label-row" onClick={onToggle}>
-        <span className="sidebar-icon">{icon || "•"}</span>
+        <span className="sidebar-icon">{icon || "?"}</span>
         {!collapsed && <span className="sidebar-group-label">{label}</span>}
         {!collapsed && <span className="sidebar-group-caret">{expanded ? "▾" : "▸"}</span>}
       </button>
-      {expanded && (
+      {(expanded || collapsed) && (
         <div className="sidebar-subnav">
           {childrenItems.map((child) => (
             <NavLink
@@ -230,8 +241,8 @@ function SidebarGroup({ label, labelKey, childrenItems, open, onToggle, t, icon,
                 `sidebar-link ${isActive ? "active" : ""}`
               }
             >
-              <span className="sidebar-icon">{child.icon || "•"}</span>
-              {!collapsed && <span>{child.labelKey ? t(child.labelKey) : child.label}</span>}
+              <span className="sidebar-icon">{child.icon || "?"}</span>
+              <span className="sidebar-label">{child.labelKey ? t(child.labelKey) : child.label}</span>
             </NavLink>
           ))}
         </div>

@@ -1,4 +1,4 @@
-body {
+﻿body {
   margin: 0;
   font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   background: #f5f7fb;
@@ -297,15 +297,22 @@ select:focus {
 
 .order-header {
   display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: stretch;
 }
 .order-actions {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+  justify-content: flex-start;
+  min-height: 38px;
+}
+.order-actions .btn {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
 }
 .order-actions .sidebar-icon {
   margin-right: 6px;
@@ -436,16 +443,48 @@ select:focus {
   display: block;
 }
 
-.pos-header-meta {
+.pos-header-top {
   display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .company-brand {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+}
+
+.pos-header-details {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.pos-header-details span {
+  white-space: nowrap;
+}
+
+.company-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.pos-header-details {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-left: auto; /* push cashier/customer to the right */
+}
+
+.pos-header-details span {
+  white-space: nowrap;
 }
 
 .company-name {
@@ -833,6 +872,23 @@ select:focus {
 
 .sidebar.collapsed {
   width: 80px;
+  overflow: visible; /* allow hover flyout */
+}
+
+.sidebar-label {
+  display: inline;
+}
+
+.sidebar.collapsed .sidebar-label {
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-subnav .sidebar-label {
+  display: inline;
+}
+
+.sidebar.collapsed .sidebar-nav {
+  overflow: visible;
 }
 
 .sidebar-header {
@@ -868,22 +924,29 @@ select:focus {
 
 .sidebar-group-label-row {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
-  padding: 0.4rem 0.6rem;
+  padding: 0.6rem 0.8rem; /* match main nav link height */
   background: transparent;
   border: none;
-  color: #e2e8f0;
+  color: #cbd5f5; /* match sidebar-link text color */
   cursor: pointer;
+  border-radius: 0.7rem;
+  gap: 0.6rem;
+  width: 100%;
+  font-weight: 600;
+  font-size: 1rem;
+  text-align: left;
 }
 
 .sidebar-group-label {
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-size: 1rem; /* match main nav link text size */
+  font-weight: 600;
 }
 
 .sidebar-group-caret {
-  font-size: 0.9rem;
+  font-size: 1rem;
+  margin-left: auto;
 }
 
 .sidebar-icon {
@@ -903,7 +966,43 @@ select:focus {
 }
 
 .sidebar.collapsed .sidebar-subnav {
-  padding-left: 0.2rem;
+  display: none; /* hide by default; show on hover */
+}
+
+/* Show submenu on hover in collapsed/docked mode */
+.sidebar.collapsed .sidebar-group {
+  position: relative;
+}
+
+.sidebar.collapsed .sidebar-group:hover .sidebar-subnav,
+.sidebar.collapsed .sidebar-group:focus-within .sidebar-subnav,
+.sidebar.collapsed .sidebar-group-label-row:hover + .sidebar-subnav {
+  display: flex;
+  position: absolute;
+  top: 0;
+  left: 100%;
+  background: #0f172a;
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.7rem;
+  border: 1px solid #1e293b;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  min-width: 180px;
+  gap: 0.15rem;
+  z-index: 999;
+}
+
+/* Keep submenu visible while hovering the flyout itself */
+.sidebar.collapsed .sidebar-group .sidebar-subnav:hover {
+  display: flex;
+}
+
+.sidebar.collapsed .sidebar-subnav .sidebar-icon {
+  display: none; /* hide icons in flyout submenu */
+}
+
+.sidebar.collapsed .sidebar-subnav .sidebar-link {
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.5rem;
 }
 
 .lang-switch {
@@ -916,15 +1015,23 @@ select:focus {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  padding-left: 0.5rem;
-  border-left: 1px solid #334155;
-  margin-left: 0.35rem;
+  padding-left: 1rem; /* slight indent to show hierarchy */
+  border-left: none;
+  margin-left: 0;
 }
 
 .sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  justify-content: flex-start;
   padding: 0.6rem 0.8rem;
   border-radius: 0.7rem;
   color: #cbd5f5;
+  text-decoration: none;
+  width: 100%;
+  font-weight: 600;
+  font-size: 1rem;
 }
 
 .sidebar-link.active {
@@ -1148,7 +1255,15 @@ select:focus {
   flex-direction: row;
 }
 
-.modal .inline-check,\n.modal label.inline-check {\n  display: flex !important;\n  flex-direction: row !important;\n  align-items: center !important;\n  justify-content: space-between !important;\n  gap: 0.5rem !important;\n  width: 100%;\n}
+.modal .inline-check,
+.modal label.inline-check {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.5rem !important;
+  width: 100%;
+}
 
 .product-import-page .inline-check,
 .product-import-page label.inline-check {
@@ -1176,11 +1291,26 @@ select:focus {
   padding: 1.5rem;
   z-index: 999;
 }
-.modal {\n  background: #fff;\n  padding: 1.4rem;\n  border-radius: 0.75rem;\n  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);\n  max-width: 900px;\n  width: 100%;\n  max-height: 85vh;\n  overflow: auto;\n  margin: auto;\n}
+.modal {
+  background: #fff;
+  padding: 1.4rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+  max-width: 900px;
+  width: 100%;
+  max-height: 85vh;
+  overflow: auto;
+  margin: auto;
+}
 .modal-section {
   margin: 0.75rem 0;
 }
-.modal-grid {\n  display: grid;\n  grid-template-columns: 1.2fr 1fr;\n  gap: 1.25rem;\n  align-items: start;\n}
+.modal-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
 .modal-checkboxes {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -1971,7 +2101,10 @@ select:focus {
 .charge-area {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
 }
 
 
@@ -2018,6 +2151,3 @@ select:focus {
   gap: 0.5rem;
   font-weight: 500;
 }
-
-
-
