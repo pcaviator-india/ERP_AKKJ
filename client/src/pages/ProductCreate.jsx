@@ -37,6 +37,8 @@ const initialProduct = {
   IsTaxable: 1,
   TaxRateID: "",
   IsService: 0,
+  UsesLots: 0,
+  UsesSerials: 0,
   Weight: "",
   WeightUnitID: "",
   Length: "",
@@ -77,6 +79,21 @@ export default function ProductCreate() {
   const availableDefs = useMemo(
     () => customDefs.filter((d) => !selectedDefIds.includes(d.id)),
     [customDefs, selectedDefIds]
+  );
+  const [isPack, setIsPack] = useState(false);
+  const [packComponents, setPackComponents] = useState([]);
+  const [packSearch, setPackSearch] = useState("");
+  const [packResults, setPackResults] = useState([]);
+  const [packAutoPrice, setPackAutoPrice] = useState(true);
+  const [hadPack, setHadPack] = useState(false);
+  const packTotal = useMemo(
+    () =>
+      packComponents.reduce((sum, item) => {
+        const qty = Number(item.ComponentQuantity || 0);
+        const price = Number(item.SellingPrice || 0);
+        return sum + price * qty;
+      }, 0),
+    [packComponents]
   );
 
   const addCustomField = (id) => {
@@ -221,10 +238,11 @@ export default function ProductCreate() {
       setLoadingProduct(true);
       setStatus({ type: "", message: "" });
       try {
-        const [prodRes, valuesRes, imagesRes] = await Promise.all([
+        const [prodRes, valuesRes, imagesRes, packRes] = await Promise.all([
           api.get(`/api/products/${idParam}`),
           api.get(`/api/custom-fields/product/values?productId=${idParam}`),
           api.get(`/api/products/${idParam}/images`),
+          api.get(`/api/product-packs/${idParam}`).catch(() => ({ data: [] })),
         ]);
         const data = prodRes.data;
         setCurrentProductId(Number(idParam));
@@ -239,6 +257,8 @@ export default function ProductCreate() {
           SellingPrice: data.SellingPrice ?? "",
           IsTaxable: data.IsTaxable ?? 1,
           IsService: data.IsService ?? 0,
+          UsesLots: data.UsesLots ?? 0,
+          UsesSerials: data.UsesSerials ?? 0,
           Weight: data.Weight ?? "",
           WeightUnitID: data.WeightUnitID || "",
           Length: data.Length ?? "",
@@ -260,6 +280,30 @@ export default function ProductCreate() {
         setExistingImages(imgs);
         const primary = imgs.find((i) => i.IsPrimary);
         setPrimaryImageId(primary ? primary.ProductImageID : null);
+
+        const packList = Array.isArray(packRes?.data) ? packRes.data : [];
+        if (packList.length) {
+          setIsPack(true);
+          setHadPack(true);
+          const mapped = packList.map((row) => ({
+            ProductID: row.ComponentProductID,
+            ProductName: row.ProductName,
+            SKU: row.SKU,
+            SellingPrice: Number(row.SellingPrice || 0),
+            ComponentQuantity: Number(row.ComponentQuantity || 1),
+          }));
+          setPackComponents(mapped);
+          const sum = mapped.reduce(
+            (acc, item) => acc + Number(item.SellingPrice || 0) * Number(item.ComponentQuantity || 0),
+            0
+          );
+          const currentPrice = Number(data.SellingPrice || 0);
+          setPackAutoPrice(Math.abs(currentPrice - sum) < 0.01);
+        } else {
+          setIsPack(false);
+          setHadPack(false);
+          setPackComponents([]);
+        }
       } catch (err) {
         console.error("Failed to load product", err);
         setStatus({ type: "error", message: t("products.loadError") });
@@ -270,6 +314,47 @@ export default function ProductCreate() {
     loadProduct();
   }, [idParam, isEdit, t]);
 
+  useEffect(() => {
+    if (!isPack || !packAutoPrice) return;
+    setProduct((prev) => ({
+      ...prev,
+      SellingPrice: Number(packTotal.toFixed(4)),
+    }));
+  }, [isPack, packAutoPrice, packTotal]);
+
+  useEffect(() => {
+    if (!isPack) {
+      setPackResults([]);
+      return;
+    }
+    const term = packSearch.trim();
+    if (term.length < 2) {
+      setPackResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.get(`/api/products?q=${encodeURIComponent(term)}`);
+        const list = Array.isArray(res.data) ? res.data : [];
+        const componentIds = new Set(
+          packComponents.map((c) => Number(c.ProductID))
+        );
+        const filtered = list.filter((item) => {
+          const pid = Number(item.ProductID || item.ProductId || item.id || 0);
+          if (!pid) return false;
+          if (componentIds.has(pid)) return false;
+          if (currentProductId && pid === Number(currentProductId)) return false;
+          return true;
+        });
+        setPackResults(filtered);
+      } catch (err) {
+        console.error("Failed to search products", err);
+        setPackResults([]);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [packSearch, packComponents, isPack, currentProductId]);
+
   const updateField = (field, value) => {
     setProduct((prev) => ({ ...prev, [field]: value }));
   };
@@ -277,6 +362,41 @@ export default function ProductCreate() {
   const updateNumber = (field, value) => {
     const n = value === "" ? "" : Number(value);
     setProduct((prev) => ({ ...prev, [field]: n }));
+  };
+
+  const addPackComponent = (item) => {
+    const productId = Number(item?.ProductID || item?.ProductId || item?.id || 0);
+    if (!productId) return;
+    if (packComponents.some((c) => Number(c.ProductID) === productId)) return;
+    setPackComponents((prev) => [
+      ...prev,
+      {
+        ProductID: productId,
+        ProductName: item.ProductName || item.Name || "",
+        SKU: item.SKU || item.sku || "",
+        SellingPrice: Number(item.SellingPrice || 0),
+        ComponentQuantity: 1,
+      },
+    ]);
+    setPackSearch("");
+    setPackResults([]);
+  };
+
+  const updatePackComponentQty = (productId, value) => {
+    const qty = Math.max(0.0001, Number(value) || 0);
+    setPackComponents((prev) =>
+      prev.map((item) =>
+        Number(item.ProductID) === Number(productId)
+          ? { ...item, ComponentQuantity: qty }
+          : item
+      )
+    );
+  };
+
+  const removePackComponent = (productId) => {
+    setPackComponents((prev) =>
+      prev.filter((item) => Number(item.ProductID) !== Number(productId))
+    );
   };
 
   const buildFieldPayload = () =>
@@ -428,9 +548,18 @@ export default function ProductCreate() {
       });
       return;
     }
+    if (isPack && packComponents.length === 0) {
+      setStatus({
+        type: "error",
+        message: "Add at least one pack component",
+      });
+      return;
+    }
     setSaving(true);
     const payload = {
       ...product,
+      UsesLots: product.UsesLots ? 1 : 0,
+      UsesSerials: product.UsesSerials ? 1 : 0,
       ImageURL: product.ImageURL || null,
       ProductCategoryID: product.ProductCategoryID || null,
       ProductBrandID: product.ProductBrandID || null,
@@ -467,6 +596,11 @@ export default function ProductCreate() {
         if (savedId) setCurrentProductId(savedId);
         setStatus({ type: "success", message: t("productForm.saveSuccess") });
         setProduct(initialProduct);
+        setIsPack(false);
+        setPackComponents([]);
+        setPackSearch("");
+        setPackResults([]);
+        setPackAutoPrice(true);
       }
 
       const targetId = Number(savedId || idParam || 0);
@@ -488,6 +622,30 @@ export default function ProductCreate() {
             type: "error",
             message: err.response?.data?.error || err.message || t("customFields.saveError"),
           }));
+        }
+      }
+
+      if (targetId) {
+        try {
+          if (isPack) {
+            await api.put(`/api/product-packs/${targetId}`, {
+              PackProductID: targetId,
+              components: packComponents.map((item) => ({
+                componentProductId: Number(item.ProductID),
+                componentQuantity: Number(item.ComponentQuantity || 0),
+              })),
+            });
+            setHadPack(true);
+          } else if (hadPack) {
+            await api.delete(`/api/product-packs/${targetId}`);
+            setHadPack(false);
+          }
+        } catch (err) {
+          console.error("Failed to save pack components", err);
+          setStatus({
+            type: "error",
+            message: err.response?.data?.error || "Failed to save pack components",
+          });
         }
       }
 
@@ -543,6 +701,11 @@ export default function ProductCreate() {
             disabled={saving}
             onClick={() => {
               setProduct(initialProduct);
+              setIsPack(false);
+              setPackComponents([]);
+              setPackSearch("");
+              setPackResults([]);
+              setPackAutoPrice(true);
               setStatus({ type: "", message: "" });
             }}
           >
@@ -634,7 +797,10 @@ export default function ProductCreate() {
               min="0"
               step="0.01"
               value={product.SellingPrice}
-              onChange={(e) => updateNumber("SellingPrice", e.target.value)}
+              onChange={(e) => {
+                if (isPack) setPackAutoPrice(false);
+                updateNumber("SellingPrice", e.target.value);
+              }}
             />
           </label>
           <label>
@@ -645,6 +811,135 @@ export default function ProductCreate() {
             />
           </label>
         </div>
+
+        <label className="toggle inline-check">
+          <span>Pack product</span>
+          <input
+            type="checkbox"
+            checked={isPack}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setIsPack(checked);
+              if (!checked) {
+                setPackComponents([]);
+                setPackSearch("");
+                setPackResults([]);
+                setPackAutoPrice(true);
+              }
+            }}
+          />
+        </label>
+
+        {isPack && (
+          <div className="card">
+            <div className="inline-row">
+              <label className="toggle inline-check">
+                <span>Auto price from components</span>
+                <input
+                  type="checkbox"
+                  checked={packAutoPrice}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setPackAutoPrice(next);
+                    if (next) {
+                      setProduct((prev) => ({
+                        ...prev,
+                        SellingPrice: Number(packTotal.toFixed(4)),
+                      }));
+                    }
+                  }}
+                />
+              </label>
+              <span className="muted small">
+                Auto sum: {Number(packTotal || 0).toLocaleString()}
+              </span>
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={() => {
+                  setPackAutoPrice(true);
+                  setProduct((prev) => ({
+                    ...prev,
+                    SellingPrice: Number(packTotal.toFixed(4)),
+                  }));
+                }}
+              >
+                Use auto sum
+              </button>
+            </div>
+
+            <label>
+              Find component product
+              <div className="search-input">
+                <input
+                  value={packSearch}
+                  onChange={(e) => setPackSearch(e.target.value)}
+                  placeholder="Search by name, SKU, or barcode"
+                />
+              </div>
+            </label>
+            {packResults.length > 0 && (
+              <ul className="list">
+                {packResults.map((item) => (
+                  <li key={item.ProductID} className="list-row">
+                    <span>
+                      {item.SKU ? `${item.SKU} - ` : ""}
+                      {item.ProductName}
+                    </span>
+                    <div className="list-actions inline">
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        onClick={() => addPackComponent(item)}
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {packComponents.length === 0 ? (
+              <p className="muted small">No components added yet.</p>
+            ) : (
+              <div className="entity-list">
+                {packComponents.map((item) => (
+                  <div key={item.ProductID} className="entity-row">
+                    <div className="stack">
+                      <span className="entity-name">
+                        {item.SKU ? `${item.SKU} - ` : ""}
+                        {item.ProductName}
+                      </span>
+                      <span className="muted small">
+                        Price: {Number(item.SellingPrice || 0).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="inline-inputs">
+                      <input
+                        type="number"
+                        min="0.0001"
+                        step="0.0001"
+                        value={item.ComponentQuantity}
+                        onChange={(e) =>
+                          updatePackComponentQty(item.ProductID, e.target.value)
+                        }
+                        style={{ width: 90 }}
+                      />
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        onClick={() => removePackComponent(item.ProductID)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="grid two">
           <label className="toggle inline-check">
@@ -682,7 +977,37 @@ export default function ProductCreate() {
             <input
               type="checkbox"
               checked={Boolean(product.IsService)}
-              onChange={(e) => updateField("IsService", e.target.checked ? 1 : 0)}
+              onChange={(e) => {
+                const checked = e.target.checked ? 1 : 0;
+                updateField("IsService", checked);
+                if (checked) updateField("UsesLots", 0);
+              }}
+            />
+          </label>
+          <label className="toggle inline-check">
+            <span>{t("productForm.usesLots", "Track lots")}</span>
+            <input
+              type="checkbox"
+              checked={Boolean(product.UsesLots)}
+              onChange={(e) => {
+                const checked = e.target.checked ? 1 : 0;
+                updateField("UsesLots", checked);
+                if (checked) updateField("UsesSerials", 0);
+              }}
+              disabled={Boolean(product.IsService) || Boolean(product.UsesSerials)}
+            />
+          </label>
+          <label className="toggle inline-check">
+            <span>{t("productForm.usesSerials", "Track serials")}</span>
+            <input
+              type="checkbox"
+              checked={Boolean(product.UsesSerials)}
+              onChange={(e) => {
+                const checked = e.target.checked ? 1 : 0;
+                updateField("UsesSerials", checked);
+                if (checked) updateField("UsesLots", 0);
+              }}
+              disabled={Boolean(product.UsesLots)}
             />
           </label>
         </div>

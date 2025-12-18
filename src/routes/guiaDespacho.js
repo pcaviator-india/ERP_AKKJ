@@ -172,6 +172,15 @@ async function applyInventoryOutForGuia(
       pilId = current.ProductInventoryLevelID;
     }
 
+    if (ProductLotID) {
+      await conn.query(
+        `INSERT INTO ProductLotInventory (ProductLotID, WarehouseID, Quantity)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE Quantity = Quantity + VALUES(Quantity)`,
+        [ProductLotID, warehouseId, qtyChange]
+      );
+    }
+
     // Insert inventory transaction
     await conn.query(
       `

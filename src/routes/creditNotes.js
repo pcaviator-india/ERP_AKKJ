@@ -156,7 +156,7 @@ router.post("/credit-note", async (req, res) => {
 
     // 5. Insert NC items + Inventory + Inventory Transactions
     for (const item of Items) {
-      const { ProductID, Quantity, UnitPrice, Notes: ItemNotes } = item;
+      const { ProductID, Quantity, UnitPrice, Notes: ItemNotes, ProductLotID } = item;
 
       // Insert into SalesItems (quantities & prices positive)
       await conn.query(
@@ -166,36 +166,49 @@ router.post("/credit-note", async (req, res) => {
           DiscountPercentage, DiscountAmountItem,
           TaxRatePercentage, TaxAmountItem,
           IsLineExenta, ProductLotID, ProductSerialID
-        ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, NULL, NULL)`,
-        [newNCID, ProductID, ItemNotes || null, Quantity, UnitPrice]
+        ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, ?, NULL)`,
+        [newNCID, ProductID, ItemNotes || null, Quantity, UnitPrice, ProductLotID || null]
       );
 
-      // Ensure inventory level row exists (optional, but safer)
+      const lotId = ProductLotID || null;
       const [invRows] = await conn.query(
-        `SELECT ProductInventoryLevelID 
+        `SELECT ProductInventoryLevelID
          FROM ProductInventoryLevels
-         WHERE ProductID = ? AND WarehouseID = ?
+         WHERE ProductID = ? AND WarehouseID = ? AND
+               ((ProductLotID IS NULL AND ? IS NULL) OR ProductLotID = ?)
          LIMIT 1`,
-        [ProductID, WarehouseID]
+        [ProductID, WarehouseID, lotId, lotId]
       );
 
+      let pilId;
       if (invRows.length === 0) {
-        await conn.query(
+        const [insertLevel] = await conn.query(
           `INSERT INTO ProductInventoryLevels (
              ProductID, WarehouseID, StockQuantity, ReservedQuantity,
              MinStockLevel, MaxStockLevel, ProductLotID
-           ) VALUES (?, ?, 0, 0, NULL, NULL, NULL)`,
-          [ProductID, WarehouseID]
+           ) VALUES (?, ?, 0, 0, NULL, NULL, ?)`,
+          [ProductID, WarehouseID, lotId]
         );
+        pilId = insertLevel.insertId;
+      } else {
+        pilId = invRows[0].ProductInventoryLevelID;
       }
 
-      // Inventory increase for NOTA_CREDITO
       await conn.query(
         `UPDATE ProductInventoryLevels
          SET StockQuantity = StockQuantity + ?, LastUpdatedAt = NOW()
-         WHERE ProductID = ? AND WarehouseID = ?`,
-        [Quantity, ProductID, WarehouseID]
+         WHERE ProductInventoryLevelID = ?`,
+        [Quantity, pilId]
       );
+
+      if (lotId) {
+        await conn.query(
+          `INSERT INTO ProductLotInventory (ProductLotID, WarehouseID, Quantity)
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE Quantity = Quantity + VALUES(Quantity)`,
+          [lotId, WarehouseID, Quantity]
+        );
+      }
 
       // Log Inventory Transaction
       await conn.query(
@@ -205,13 +218,14 @@ router.post("/credit-note", async (req, res) => {
           TransactionDate, ReferenceDocumentType, ReferenceDocumentID,
           ProductLotID, ProductSerialID, Notes
         )
-        VALUES (?, ?, ?, 'CreditNote', ?, NOW(), 'NOTA_CREDITO', ?, NULL, NULL, ?)`,
+        VALUES (?, ?, ?, 'CreditNote', ?, NOW(), 'NOTA_CREDITO', ?, ?, NULL, ?)`,
         [
           companyId,
           ProductID,
           WarehouseID,
           Quantity,
           newNCID,
+          lotId,
           "NOTA_CREDITO creada",
         ]
       );

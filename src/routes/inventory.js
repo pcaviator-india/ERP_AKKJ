@@ -19,6 +19,8 @@ router.get("/levels", async (req, res) => {
         p.ProductCategoryID,
         p.ProductName,
         p.IsActive,
+        p.UsesLots,
+        p.UsesSerials,
         pil.WarehouseID,
         w.WarehouseName,
         pil.StockQuantity,
@@ -27,10 +29,13 @@ router.get("/levels", async (req, res) => {
         pil.MinStockLevel,
         pil.MaxStockLevel,
         pil.LastUpdatedAt,
-        pil.ProductLotID
+        pil.ProductLotID,
+        pl.LotNumber,
+        pl.ExpirationDate
       FROM ProductInventoryLevels pil
       INNER JOIN Products p ON pil.ProductID = p.ProductID
       INNER JOIN Warehouses w ON pil.WarehouseID = w.WarehouseID
+      LEFT JOIN ProductLots pl ON pil.ProductLotID = pl.ProductLotID
       WHERE p.CompanyID = ? AND w.CompanyID = ?
     `;
     const params = [companyId, companyId];
@@ -165,6 +170,15 @@ router.post("/levels/bulk-save", async (req, res) => {
         );
       }
 
+      if (ProductLotID) {
+        await conn.query(
+          `INSERT INTO ProductLotInventory (ProductLotID, WarehouseID, Quantity)
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE Quantity = VALUES(Quantity)`,
+          [ProductLotID, WarehouseID, payload.StockQuantity]
+        );
+      }
+
       // Record a simple inventory transaction for audit
       if (quantityDelta !== 0) {
         await conn.query(
@@ -272,6 +286,15 @@ router.post("/adjust", async (req, res) => {
       );
 
       pilId = current.ProductInventoryLevelID;
+    }
+
+    if (ProductLotID) {
+      await conn.query(
+        `INSERT INTO ProductLotInventory (ProductLotID, WarehouseID, Quantity)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE Quantity = Quantity + VALUES(Quantity)`,
+        [ProductLotID, WarehouseID, QuantityChange]
+      );
     }
 
     // Insert inventory transaction

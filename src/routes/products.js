@@ -92,6 +92,8 @@ router.get("/", async (req, res) => {
          tr.Name AS TaxRateName,
          tr.RatePercentage AS TaxRatePercentage,
          p.IsService,
+         p.UsesLots,
+         p.UsesSerials,
          p.Weight,
          p.WeightUnitID,
          p.Length,
@@ -194,6 +196,7 @@ function mapRowToProduct(row, mapping = {}, lookups = {}) {
     IsTaxable: toBool(getVal("taxable")),
     TaxRateID: toNumber(getVal("taxRateId")),
     IsService: toBool(getVal("service")),
+    UsesSerials: toBool(getVal("usesSerials")),
     Weight: toNumber(getVal("weight")),
     WeightUnitID: toUnit(getVal("weightUnit"), lookups.weightUnitMap || lookups.unitMap),
     Length: toNumber(getVal("length")),
@@ -919,6 +922,8 @@ router.get("/:id", async (req, res) => {
          tr.Name AS TaxRateName,
          tr.RatePercentage AS TaxRatePercentage,
          p.IsService,
+         p.UsesLots,
+         p.UsesSerials,
          p.Weight,
          p.WeightUnitID,
          p.Length,
@@ -1221,6 +1226,8 @@ router.post("/", async (req, res) => {
     IsTaxable,
     TaxRateID,
     IsService,
+    UsesLots,
+    UsesSerials,
     Weight,
     WeightUnitID,
     Length,
@@ -1237,16 +1244,20 @@ router.post("/", async (req, res) => {
     });
   }
 
+  if ((UsesLots ?? 0) && (UsesSerials ?? 0)) {
+    return res.status(400).json({ error: "Product cannot track both lots and serials." });
+  }
+
   try {
     const [result] = await pool.query(
       `INSERT INTO Products
-        (CompanyID, SKU, ProductName, Description,
-         ProductCategoryID, ProductBrandID, UnitID,
-         CostPrice, SellingPrice, IsTaxable, TaxRateID, IsService,
-         Weight, WeightUnitID,
-         Length, Width, Height, DimensionUnitID,
-         ImageURL, Barcode, IsActive)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+          (CompanyID, SKU, ProductName, Description,
+           ProductCategoryID, ProductBrandID, UnitID,
+           CostPrice, SellingPrice, IsTaxable, TaxRateID, IsService, UsesLots, UsesSerials,
+           Weight, WeightUnitID,
+           Length, Width, Height, DimensionUnitID,
+           ImageURL, Barcode, IsActive)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [
         companyId,
         SKU,
@@ -1260,6 +1271,8 @@ router.post("/", async (req, res) => {
         IsTaxable ?? 1,
         TaxRateID || null,
         IsService ?? 0,
+        UsesLots ?? 0,
+        UsesSerials ?? 0,
         Weight || null,
         WeightUnitID || null,
         Length || null,
@@ -1286,6 +1299,8 @@ router.post("/", async (req, res) => {
         IsTaxable,
         TaxRateID,
         IsService,
+        UsesLots,
+        UsesSerials,
         Weight,
         WeightUnitID,
         Length,
@@ -1326,6 +1341,8 @@ router.put("/:id", async (req, res) => {
     IsTaxable,
     TaxRateID,
     IsService,
+    UsesLots,
+    UsesSerials,
     Weight,
     WeightUnitID,
     Length,
@@ -1336,6 +1353,10 @@ router.put("/:id", async (req, res) => {
     Barcode,
     IsActive,
   } = req.body;
+
+  if ((UsesLots ?? 0) && (UsesSerials ?? 0)) {
+    return res.status(400).json({ error: "Product cannot track both lots and serials." });
+  }
 
   try {
     const [result] = await pool.query(
@@ -1349,10 +1370,12 @@ router.put("/:id", async (req, res) => {
          UnitID = ?,
          CostPrice = ?,
          SellingPrice = ?,
-         IsTaxable = ?,
-         TaxRateID = ?,
-         IsService = ?,
-         Weight = ?,
+        IsTaxable = ?,
+        TaxRateID = ?,
+        IsService = ?,
+        UsesLots = ?,
+        UsesSerials = ?,
+        Weight = ?,
          WeightUnitID = ?,
          Length = ?,
          Width = ?,
@@ -1374,6 +1397,8 @@ router.put("/:id", async (req, res) => {
         IsTaxable ?? 1,
         TaxRateID || null,
         IsService ?? 0,
+        UsesLots ?? 0,
+        UsesSerials ?? 0,
         Weight || null,
         WeightUnitID || null,
         Length || null,
@@ -1404,9 +1429,11 @@ router.put("/:id", async (req, res) => {
          UnitID,
          CostPrice,
          SellingPrice,
-         IsTaxable,
-         IsService,
-         Weight,
+        IsTaxable,
+        IsService,
+        UsesLots,
+        UsesSerials,
+        Weight,
          WeightUnitID,
          Length,
          Width,

@@ -2,10 +2,26 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/http";
 import { useAuth } from "../context/AuthContext";
+import { useConfig } from "../context/ConfigContext";
 import { useLanguage } from "../context/LanguageContext";
+
+const normalizeList = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== "object") return [];
+  const candidates = [
+    payload.items,
+    payload.data,
+    payload.customers,
+    payload.promotions,
+    payload.priceLists,
+    payload.products,
+  ];
+  return candidates.find(Array.isArray) || [];
+};
 
 export default function Dashboard() {
   const { company } = useAuth();
+  const { config } = useConfig();
   const { t } = useLanguage();
   const [stats, setStats] = useState({
     sales: 0,
@@ -22,10 +38,11 @@ export default function Dashboard() {
           api.get("/api/suppliers"),
           api.get("/api/products"),
         ]);
+        const productList = normalizeList(productRes?.data);
         setStats({
           sales: salesRes.data.length,
           suppliers: supplierRes.data.length,
-          products: productRes.data.length,
+          products: productList.length,
         });
       } catch (error) {
         console.warn("Unable to load stats yet", error);
@@ -37,28 +54,100 @@ export default function Dashboard() {
   useEffect(() => {
     const loadChecklist = async () => {
       try {
-        const [whRes, unitRes, brandRes, catRes, payRes] = await Promise.all([
+        const [
+          whRes,
+          unitRes,
+          catRes,
+          custRes,
+          employeeRes,
+          taxRes,
+          promoRes,
+          priceRes,
+        ] = await Promise.all([
           api.get("/api/warehouses").catch(() => ({ data: [] })),
           api.get("/api/units").catch(() => ({ data: [] })),
-          api.get("/api/brands").catch(() => ({ data: [] })),
           api.get("/api/categories").catch(() => ({ data: [] })),
-          api.get("/api/payment-methods").catch(() => ({ data: [] })),
+          api.get("/api/customers").catch(() => ({ data: [] })),
+          api.get("/api/employees").catch(() => ({ data: [] })),
+          api.get("/api/tax-rates").catch(() => ({ data: [] })),
+          api.get("/api/promotions").catch(() => ({ data: [] })),
+          api.get("/api/price-lists").catch(() => ({ data: [] })),
         ]);
 
         const hasCompany = Boolean(company?.CompanyName);
-        const whList = Array.isArray(whRes.data) ? whRes.data : [];
-        const unitList = Array.isArray(unitRes.data) ? unitRes.data : [];
-        const brandList = Array.isArray(brandRes.data) ? brandRes.data : [];
-        const catList = Array.isArray(catRes.data) ? catRes.data : [];
-        const payList = Array.isArray(payRes.data) ? payRes.data : [];
+        const whList = normalizeList(whRes?.data);
+        const unitList = normalizeList(unitRes?.data);
+        const catList = normalizeList(catRes?.data);
+        const customerList = normalizeList(custRes?.data);
+        const employeeList = normalizeList(employeeRes?.data);
+        const taxList = normalizeList(taxRes?.data);
+        const promoList = normalizeList(promoRes?.data);
+        const priceList = normalizeList(priceRes?.data);
+        const accessories = config?.accessories || {};
+        const printerList = Object.values(accessories.defaultPrinters || {}).filter(
+          Boolean
+        );
+        const hasPrinterSettings =
+          printerList.length > 0 ||
+          Boolean(accessories.agentUrl) ||
+          Boolean(accessories.qzEnabled);
 
         const items = [
-          { key: "company", label: t("dashboard.chkCompany"), done: hasCompany },
-          { key: "warehouse", label: t("dashboard.chkWarehouse"), done: whList.length > 0 },
-          { key: "units", label: t("dashboard.chkUnits"), done: unitList.length > 0 },
-          { key: "categories", label: t("dashboard.chkCategoriesBrands"), done: catList.length > 0 && brandList.length > 0 },
-          { key: "payments", label: t("dashboard.chkPayments"), done: payList.length > 0 },
-          { key: "products", label: t("dashboard.chkProducts"), done: stats.products > 0 },
+          {
+            key: "company",
+            label: t("dashboard.chkCompanyDetails"),
+            done: hasCompany,
+          },
+          {
+            key: "taxRates",
+            label: t("dashboard.chkTaxRates"),
+            done: taxList.length > 0,
+          },
+          {
+            key: "customers",
+            label: t("dashboard.chkCustomers"),
+            done: customerList.length > 0,
+          },
+          {
+            key: "categories",
+            label: t("dashboard.chkCategories"),
+            done: catList.length > 0,
+          },
+          {
+            key: "warehouse",
+            label: t("dashboard.chkWarehouse"),
+            done: whList.length > 0,
+          },
+          {
+            key: "units",
+            label: t("dashboard.chkUnits"),
+            done: unitList.length > 0,
+          },
+          {
+            key: "products",
+            label: t("dashboard.chkProducts"),
+            done: stats.products > 0,
+          },
+          {
+            key: "employees",
+            label: t("dashboard.chkEmployees"),
+            done: employeeList.length > 0,
+          },
+          {
+            key: "promotions",
+            label: t("dashboard.chkPromotions"),
+            done: promoList.length > 0,
+          },
+          {
+            key: "priceLists",
+            label: t("dashboard.chkPriceLists"),
+            done: priceList.length > 0,
+          },
+          {
+            key: "printers",
+            label: t("dashboard.chkPrinterSettings"),
+            done: hasPrinterSettings,
+          },
         ];
 
         setChecklist(items);
@@ -67,7 +156,7 @@ export default function Dashboard() {
       }
     };
     loadChecklist();
-  }, [company, stats.products, t]);
+  }, [company, stats.products, t, config]);
 
   return (
     <div className="grid">

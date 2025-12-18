@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api/http";
 import { useLanguage } from "../context/LanguageContext";
 
@@ -14,12 +14,16 @@ export default function ReceiptSettings() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState({ type: "", message: "" });
+  const [ready, setReady] = useState(false);
+  const autosaveTimerRef = useRef(null);
+  const autosaveIdRef = useRef(0);
 
   const loadConfig = async () => {
     setLoading(true);
     try {
       const { data } = await api.get("/api/config");
       setConfig(data || {});
+      setReady(true);
     } catch (err) {
       setStatus({ type: "error", message: "Failed to load config" });
     } finally {
@@ -29,6 +33,11 @@ export default function ReceiptSettings() {
 
   useEffect(() => {
     loadConfig();
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+      }
+    };
   }, []);
 
   const receiptConfig = useMemo(() => config?.receipts || {}, [config]);
@@ -42,25 +51,52 @@ export default function ReceiptSettings() {
         ...next.receipts.sizes[sizeKey],
         [field]: value,
       };
+      queueAutosave(next.receipts);
       return next;
     });
   };
 
-  const handleSave = async () => {
-    if (!config) return;
-    setSaving(true);
-    setStatus({ type: "", message: "" });
+  const persistReceipts = async (nextReceipts, { silent } = {}) => {
+    if (!nextReceipts) return;
+    const saveId = ++autosaveIdRef.current;
+    if (!silent) {
+      setSaving(true);
+      setStatus({ type: "", message: "" });
+    }
     try {
       const { data } = await api.patch("/api/config", {
-        updates: { receipts: config.receipts },
+        updates: { receipts: nextReceipts },
       });
-      setConfig((prev) => ({ ...(prev || {}), ...data }));
-      setStatus({ type: "success", message: "Receipt settings saved" });
+      if (data && autosaveIdRef.current === saveId) {
+        setConfig((prev) => ({ ...(prev || {}), ...data }));
+      }
+      if (!silent) {
+        setStatus({ type: "success", message: "Receipt settings saved" });
+      }
     } catch (err) {
-      setStatus({ type: "error", message: "Failed to save receipt settings" });
+      if (!silent) {
+        setStatus({ type: "error", message: "Failed to save receipt settings" });
+      }
     } finally {
-      setSaving(false);
+      if (!silent) {
+        setSaving(false);
+      }
     }
+  };
+
+  const queueAutosave = (nextReceipts) => {
+    if (!ready) return;
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+    autosaveTimerRef.current = setTimeout(() => {
+      persistReceipts(nextReceipts, { silent: true });
+    }, 600);
+  };
+
+  const handleSave = async () => {
+    if (!config?.receipts) return;
+    await persistReceipts(config.receipts, { silent: false });
   };
 
   const renderSizeCard = (sizeKey, label) => {
@@ -184,13 +220,17 @@ export default function ReceiptSettings() {
           <select
             value={receiptConfig.defaultSize || "80mm"}
             onChange={(e) =>
-              setConfig((prev) => ({
-                ...(prev || {}),
-                receipts: {
-                  ...(prev?.receipts || {}),
-                  defaultSize: e.target.value,
-                },
-              }))
+              setConfig((prev) => {
+                const next = {
+                  ...(prev || {}),
+                  receipts: {
+                    ...(prev?.receipts || {}),
+                    defaultSize: e.target.value,
+                  },
+                };
+                queueAutosave(next.receipts);
+                return next;
+              })
             }
           >
             {sizeOptions.map((opt) => (

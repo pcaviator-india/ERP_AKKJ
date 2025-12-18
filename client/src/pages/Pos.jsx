@@ -6,6 +6,14 @@ import { useConfig } from "../context/ConfigContext";
 import { useLanguage } from "../context/LanguageContext";
 import { printWithFallback } from "../services/printService";
 
+const apiBase = import.meta.env.VITE_API_URL || "http://localhost:4000";
+const resolveImg = (url) => {
+  if (!url) return "";
+  const str = url.toString();
+  if (/^https?:\/\//i.test(str)) return str;
+  return `${apiBase}${str.startsWith("/") ? "" : "/"}${str}`;
+};
+
 const currencyFormatter = new Intl.NumberFormat("es-CL", {
   style: "currency",
   currency: "CLP",
@@ -41,6 +49,9 @@ const getProductId = (product) =>
   product?.id ??
   product?.ID ??
   null;
+const makeLineId = () =>
+  `line-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+const getLineId = (item) => item?.LineID || item?.ProductID;
 const normalizeId = (v) => Number(v ?? 0);
 const getProductName = (product) =>
   product?.ProductName ??
@@ -59,6 +70,98 @@ const getProductCategoryId = (product) =>
   product?.ProductCategoryId ??
   product?.categoryId ??
   null;
+const getProductImageUrl = (product) => {
+  const take = (val) => {
+    if (!val) return null;
+    if (typeof val === "object") {
+      return (
+        take(val.url) ||
+        take(val.Url) ||
+        take(val.uri) ||
+        take(val.href) ||
+        take(val.path) ||
+        take(val.Path) ||
+        null
+      );
+    }
+    const str = (val ?? "").toString().trim();
+    return str.length ? str : null;
+  };
+
+  const direct =
+    take(product?.ImageUrl) ||
+    take(product?.PrimaryImageURL) ||
+    take(product?.PrimaryImageUrl) ||
+    take(product?.imageUrl) ||
+    take(product?.ImageURL) ||
+    take(product?.imageURL) ||
+    take(product?.image_url) ||
+    take(product?.ThumbnailUrl) ||
+    take(product?.thumbnailUrl) ||
+    take(product?.ThumbUrl) ||
+    take(product?.thumb_url) ||
+    take(product?.PrimaryImageUrl) ||
+    take(product?.primaryImageUrl) ||
+    take(product?.ProductImageUrl) ||
+    take(product?.ProductImageURL) ||
+    take(product?.ProductImage) ||
+    take(product?.ImagePath) ||
+    take(product?.imagePath) ||
+    take(product?.ImageObj) ||
+    take(product?.PhotoUrl) ||
+    take(product?.photoUrl) ||
+    take(product?.Photo) ||
+    take(product?.PictureUrl) ||
+    take(product?.pictureUrl) ||
+    take(product?.PictureURL) ||
+    take(product?.pictureURL) ||
+    take(product?.Picture) ||
+    take(product?.Image) ||
+    take(product?.image);
+  if (direct) return direct;
+
+  const imgs =
+    product?.ProductImages ||
+    product?.images ||
+    product?.Images ||
+    product?.productImages ||
+    [];
+  const primary =
+    imgs.find?.(
+      (img) =>
+        img?.IsPrimary === true ||
+        img?.isPrimary === true ||
+        img?.IsPrimary === 1 ||
+        img?.isPrimary === 1 ||
+        img?.IsPrimary === "1" ||
+        img?.isPrimary === "1"
+    ) || null;
+  if (primary) {
+    const primaryUrl =
+      take(primary.ImageUrl) ||
+      take(primary.ImageURL) ||
+      take(primary.PrimaryImageURL) ||
+      take(primary.url) ||
+      take(primary.Url) ||
+      take(primary.Image) ||
+      take(primary.Path) ||
+      take(primary.image_url) ||
+      take(primary.imageUrl);
+    if (primaryUrl) return primaryUrl;
+  }
+
+  const firstImage =
+    take(imgs?.[0]?.ImageUrl) ||
+    take(imgs?.[0]?.url) ||
+    take(imgs?.[0]?.Url) ||
+    take(imgs?.[0]?.Image) ||
+    take(imgs?.[0]?.Path) ||
+    take(imgs?.[0]?.image_url) ||
+    take(imgs?.[0]?.imageUrl);
+  if (firstImage) return firstImage;
+
+  return null;
+};
 const getProductPrice = (product) =>
   Number(
     product?.SellingPrice ??
@@ -70,6 +173,12 @@ const getProductPrice = (product) =>
       0
   );
 const normalizeQty = (value) => Math.max(1, Math.round(Number(value) || 0));
+const formatShortDate = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString();
+};
 const isTicketCode = (value = "") => {
   const term = value.toString().trim();
   return /^(tkt|cot|cotizacion)[-\s]?[a-z0-9_-]+$/i.test(term);
@@ -113,7 +222,24 @@ export default function Pos() {
     ticket: false,
     pin: false,
     payment: false,
+    lot: false,
   });
+  const [actionsSheet, setActionsSheet] = useState(false);
+  const [catalogSheet, setCatalogSheet] = useState(false);
+  const [controlsSheet, setControlsSheet] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const closeActionsSheet = () => {
+    setActionsSheet(false);
+    focusSearchSoon();
+  };
+  const closeCatalogSheet = () => {
+    setCatalogSheet(false);
+    focusSearchSoon();
+  };
+  const closeControlsSheet = () => {
+    setControlsSheet(false);
+    focusSearchSoon();
+  };
 
   const focusSearch = () => {
     if (searchInputRef.current) {
@@ -204,12 +330,26 @@ export default function Pos() {
     error: "",
     idx: null,
   });
+  const [lotModal, setLotModal] = useState({
+    open: false,
+    mode: "single",
+    lineId: null,
+    packGroupId: null,
+  });
+  const [lotOptions, setLotOptions] = useState([]);
+  const [lotOptionsByLine, setLotOptionsByLine] = useState({});
+  const [lotModalLoading, setLotModalLoading] = useState(false);
+  const [lotModalError, setLotModalError] = useState("");
   const [promotions, setPromotions] = useState([]);
   const [promotionsLoading, setPromotionsLoading] = useState(false);
   const screenChannel = useMemo(
     () => (company?.CompanyID ? `company-${company.CompanyID}` : "default"),
     [company]
   );
+  const swipeStartRef = useRef({ x: 0, y: 0, active: false });
+  const [swipeOffsets, setSwipeOffsets] = useState({});
+  const [swipingId, setSwipingId] = useState(null);
+  const qtyTouchStartRef = useRef({});
   const publishCustomerScreen = useMemo(
     () =>
       debounce((payload) => {
@@ -237,6 +377,23 @@ export default function Pos() {
 
   useEffect(() => {
     document.title = "AKKJ POS";
+  }, []);
+
+  useEffect(() => {
+    const syncMobile = () => {
+      const mobile = window.matchMedia("(max-width: 768px)").matches;
+      setIsMobile(mobile);
+      if (mobile) {
+        setCategoryCollapsed(true);
+      } else {
+        setActionsSheet(false);
+        setCatalogSheet(false);
+        setControlsSheet(false);
+      }
+    };
+    syncMobile();
+    window.addEventListener("resize", syncMobile);
+    return () => window.removeEventListener("resize", syncMobile);
   }, []);
 
   const openOverrideModal = (item, idx) => {
@@ -301,6 +458,397 @@ export default function Pos() {
       error: "",
       idx: null,
     });
+  };
+
+  const renderActionButtons = () => (
+    <>
+      <button
+        className="btn ghost"
+        onClick={handleClose}
+        title={t("pos.dashboard")}
+      >
+        <span className="sidebar-icon" aria-hidden="true">
+          🏠
+        </span>
+        <span>{t("pos.dashboard")}</span>
+      </button>
+      <button
+        className="btn ghost"
+        onClick={handleLogout}
+        title={t("pos.logout")}
+      >
+        <span className="sidebar-icon logout-icon" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            role="presentation"
+            focusable="false"
+            width="18"
+            height="18"
+          >
+            <path
+              d="M10.5 4.5a.75.75 0 0 0-.75-.75h-4a2 2 0 0 0-2 2v12.5a2 2 0 0 0 2 2h4a.75.75 0 0 0 .75-.75V17a.75.75 0 1 0-1.5 0v2H6a.5.5 0 0 1-.5-.5V5.75A.5.5 0 0 1 6 5.25h3v2a.75.75 0 0 0 1.5 0z"
+              fill="currentColor"
+            />
+            <path
+              d="M14.53 8.47a.75.75 0 0 0-1.06 1.06L15.94 12l-2.47 2.47a.75.75 0 1 0 1.06 1.06l3-3a.75.75 0 0 0 0-1.06z"
+              fill="currentColor"
+            />
+            <path
+              d="M9.25 12a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5H10a.75.75 0 0 1-.75-.75"
+              fill="currentColor"
+            />
+          </svg>
+        </span>
+        <span>{t("pos.logout")}</span>
+      </button>
+      <button
+        className="btn ghost"
+        onClick={() => setCustomerModal(true)}
+        onBlur={focusSearchSoon}
+      >
+        {selectedCustomer?.CustomerName || t("pos.defaultCustomer")}
+      </button>
+      <button
+        className="btn ghost"
+        onClick={() => setEmployeeModal(true)}
+        onBlur={focusSearchSoon}
+      >
+        {t("pos.changeEmployee")}
+      </button>
+      <button
+        className="btn ghost"
+        onClick={parkTicket}
+        disabled={!cart.length || documentType !== "TICKET"}
+      >
+        {t("pos.parkTicket")}
+      </button>
+      <button
+        className="btn ghost"
+        onClick={loadTickets}
+        disabled={documentType !== "TICKET"}
+        onBlur={focusSearchSoon}
+      >
+        {t("pos.loadTicket")}
+      </button>
+      <button
+        className="btn ghost"
+        onClick={() => {
+          setCart([]);
+          setStatus({ type: "", message: "" });
+          focusSearchSoon();
+        }}
+        disabled={!cart.length}
+      >
+        Clear all
+      </button>
+    </>
+  );
+
+  const renderControlsContent = () => (
+    <div className="pos-footer-row top-controls">
+      <label className="control-inline">
+        <span>Document</span>
+        <select
+          value={documentType}
+          onChange={(e) => {
+            setDocumentType(e.target.value);
+            focusSearchSoon();
+          }}
+          onBlur={() => focusSearchDelayed(100)}
+        >
+          {documentTypeOptions.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="control-inline">
+        <span>Warehouse</span>
+        <select
+          value={warehouseId || ""}
+          onChange={(e) => {
+            const newId = Number(e.target.value);
+            if (cart.length > 0 && warehouseRef.current !== newId) {
+              setStatus({
+                type: "error",
+                message: "Clear cart before changing warehouse.",
+              });
+              setWarehouseId(warehouseRef.current || "");
+              focusSearchSoon();
+              return;
+            }
+            setWarehouseId(newId);
+            warehouseRef.current = newId;
+            focusSearchSoon();
+          }}
+          onBlur={() => focusSearchDelayed(100)}
+          disabled={cart.length > 0}
+        >
+          {warehouses.map((w) => (
+            <option key={w.WarehouseID} value={w.WarehouseID}>
+              {w.WarehouseName}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="control-inline">
+        <span>Price list</span>
+        <select
+          value={activePriceListId || ""}
+          onChange={(e) => {
+            setActivePriceListId(
+              e.target.value ? Number(e.target.value) : null
+            );
+            focusSearchSoon();
+          }}
+          onBlur={() => focusSearchDelayed(100)}
+        >
+          <option value="">Base price</option>
+          {priceLists.map((pl) => (
+            <option key={pl.PriceListID} value={pl.PriceListID}>
+              {pl.Name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="control-inline discount-inline">
+        <span>Discount</span>
+        <div className="discount-controls">
+          <select
+            value={discountType}
+            onChange={(e) => setDiscountType(e.target.value)}
+            disabled={
+              Object.keys(promotionOverrides).length > 0 ||
+              cart.some((c) => c.ManualOverride)
+            }
+            title={
+              Object.keys(promotionOverrides).length > 0
+                ? "Global discount disabled when promo price applies"
+                : cart.some((c) => c.ManualOverride)
+                ? "Global discount disabled when manual override is active"
+                : ""
+            }
+          >
+            <option value="amount">$</option>
+            <option value="percent">%</option>
+          </select>
+          <input
+            type="number"
+            value={discountValue}
+            onChange={(e) => setDiscountValue(e.target.value)}
+            min="0"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (searchInputRef.current) {
+                  searchInputRef.current.focus();
+                }
+              }
+            }}
+            disabled={
+              Object.keys(promotionOverrides).length > 0 ||
+              cart.some((c) => c.ManualOverride)
+            }
+            title={
+              Object.keys(promotionOverrides).length > 0
+                ? "Global discount disabled when promo price applies"
+                : cart.some((c) => c.ManualOverride)
+                ? "Global discount disabled when manual override is active"
+                : ""
+            }
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderCatalogContent = () => (
+    <aside className="catalog-panel card">
+      <div className="catalog-header">
+        <div className="catalog-actions">
+          {activeCategoryId && (
+            <>
+              <button
+                type="button"
+                className="icon-btn"
+                title="Home"
+                onClick={resetCategoryView}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 11L12 3l9 8" />
+                  <path d="M9 21V12h6v9" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="icon-btn"
+                title="Back to categories"
+                onClick={resetCategoryView}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+            </>
+          )}
+          <h3>{activeCategoryId ? "Products" : "Categories"}</h3>
+        </div>
+      </div>
+      <div className="catalog-grid">
+        {!activeCategoryId &&
+          (() => {
+            const categoriesToShow =
+              (availableCategories && availableCategories.length
+                ? availableCategories
+                : categories) || [];
+            return categoriesToShow.map((cat) => (
+              <button
+                key={cat.ProductCategoryID || cat.ProductCategoryId || cat.id}
+                className="category"
+                onClick={() => {
+                  setActiveCategoryId(cat.ProductCategoryID || cat.id);
+                  focusSearchSoon();
+                }}
+              >
+                <div className="category-icon">📁</div>
+                <div className="category-info">
+                  <strong>{cat.CategoryName || cat.name}</strong>
+                  <span className="muted small">{cat.Description}</span>
+                </div>
+              </button>
+            ));
+          })()}
+        {activeCategoryId &&
+          productsByCategory[activeCategoryId]?.length > 0 &&
+          productsByCategory[activeCategoryId].map((product) => {
+            const productImage = getProductImageUrl(product);
+            const productName = getProductName(product);
+            const fallbackInitial =
+              (
+                productName ||
+                getProductSku(product) ||
+                getProductBarcode(product) ||
+                "?"
+              )
+                .toString()
+                .trim()
+                .charAt(0)
+                .toUpperCase() || "?";
+            return (
+              <button
+                key={product.ProductID || product.id}
+                className="product-btn"
+                onClick={() => addProductToCart(product)}
+              >
+                <div className="product-thumb">
+                  {productImage ? (
+                    <img src={resolveImg(productImage)} alt={productName} />
+                  ) : (
+                    <span className="thumb-fallback">{fallbackInitial}</span>
+                  )}
+                </div>
+                <div className="product-info">
+                  <strong>{productName}</strong>
+                </div>
+              </button>
+            );
+          })}
+        {activeCategoryId &&
+          productsByCategory[activeCategoryId]?.length === 0 && (
+            <p className="muted small">No products in this category.</p>
+          )}
+      </div>
+    </aside>
+  );
+
+  const handleRowTouchStart = (lineId, e) => {
+    const touch = e.touches?.[0];
+    if (!touch) return;
+    swipeStartRef.current = {
+      x: touch.pageX,
+      y: touch.pageY,
+      id: lineId,
+      active: true,
+    };
+    setSwipingId(lineId);
+  };
+
+  const handleRowTouchMove = (lineId, e) => {
+    const touch = e.touches?.[0];
+    if (!touch) return;
+    const start = swipeStartRef.current;
+    if (!start || !start.active || start.id !== lineId) return;
+    const dx = touch.pageX - start.x;
+    const dy = touch.pageY - start.y;
+    if (Math.abs(dy) > 60) return; // vertical scroll, ignore
+    // only track left swipe
+    const clamped = Math.max(-140, Math.min(0, dx));
+    setSwipeOffsets((prev) => ({ ...prev, [lineId]: clamped }));
+  };
+
+  const handleRowTouchEnd = (lineId, e) => {
+    const touch = e.changedTouches?.[0];
+    if (!touch) return;
+    const start = swipeStartRef.current;
+    if (!start || start.id !== lineId) return;
+    const dx = touch.pageX - start.x;
+    const dy = touch.pageY - start.y;
+    const shouldDelete = dx < -90 && Math.abs(dy) < 40;
+    swipeStartRef.current = { x: 0, y: 0, active: false };
+    if (shouldDelete) {
+      removeItem(lineId);
+      setSwipeOffsets((prev) => {
+        const next = { ...prev };
+        delete next[lineId];
+        return next;
+      });
+    } else {
+      setSwipeOffsets((prev) => ({ ...prev, [lineId]: 0 }));
+    }
+    setSwipingId(null);
+  };
+
+  // Mobile: swipe up/down on qty pill to adjust whole numbers
+  const handleQtyTouchStart = (lineId, e) => {
+    e.stopPropagation();
+    const touch = e.touches?.[0];
+    if (touch) {
+      qtyTouchStartRef.current[lineId] = touch.clientY;
+    }
+  };
+
+  const handleQtyTouchEnd = (lineId, e) => {
+    e.stopPropagation();
+    const startY = qtyTouchStartRef.current[lineId];
+    const touch = e.changedTouches?.[0];
+    if (startY === undefined || !touch) return;
+    const deltaY = startY - touch.clientY;
+    const threshold = 12;
+    if (deltaY > threshold) {
+      updateQuantity(lineId, 1);
+    } else if (deltaY < -threshold) {
+      updateQuantity(lineId, -1);
+    }
+    delete qtyTouchStartRef.current[lineId];
   };
 
   useEffect(() => {
@@ -644,7 +1192,9 @@ export default function Pos() {
     setCart((prev) =>
       prev.map((item) => ({
         ...item,
-        UnitPrice: computePrice(item.ProductID, item.Quantity),
+        UnitPrice: item.IsPackComponent
+          ? item.UnitPrice
+          : computePrice(item.ProductID, item.Quantity),
       }))
     );
   }, [priceTiers]);
@@ -718,6 +1268,50 @@ export default function Pos() {
         isTaxable: 1,
       };
     return { rateId: null, ratePerc: 0, isTaxable: 1 };
+  };
+
+  const getEffectiveWarehouseId = () =>
+    warehouseId || warehouseRef.current || warehouses[0]?.WarehouseID || null;
+
+  const fetchFefoLot = async (productId) => {
+    const effectiveWarehouseId = getEffectiveWarehouseId();
+    if (!productId || !effectiveWarehouseId) return null;
+    try {
+      const { data } = await api.get("/api/product-lots/fefo", {
+        params: { productId, warehouseId: effectiveWarehouseId },
+      });
+      return data || null;
+    } catch (err) {
+      return null;
+    }
+  };
+
+  const fetchLotsForProduct = async (productId) => {
+    const effectiveWarehouseId = getEffectiveWarehouseId();
+    if (!productId || !effectiveWarehouseId) return [];
+    try {
+      const { data } = await api.get("/api/product-lots", {
+        params: { productId, warehouseId: effectiveWarehouseId, includeZero: 1 },
+      });
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      return [];
+    }
+  };
+
+  const applyLotToLine = (lineId, lot) => {
+    setCart((prev) =>
+      prev.map((item) =>
+        item.LineID === lineId
+          ? {
+              ...item,
+              ProductLotID: lot?.ProductLotID || null,
+              LotNumber: lot?.LotNumber || null,
+              LotExpirationDate: lot?.ExpirationDate || null,
+            }
+          : item
+      )
+    );
   };
 
   const isProductAvailable = (productId) => {
@@ -811,12 +1405,109 @@ export default function Pos() {
     return baseCategories;
   }, [availableProducts, allProducts, categories]);
 
-  const addProductToCart = (product) => {
+  const productsByCategory = useMemo(() => {
+    const map = {};
+    (availableProducts.length ? availableProducts : allProducts).forEach(
+      (product) => {
+        const key = getCategoryKey(getProductCategoryId(product));
+        if (!map[key]) map[key] = [];
+        map[key].push(product);
+      }
+    );
+    return map;
+  }, [availableProducts, allProducts]);
+
+  const buildCartItem = (product, quantity, options = {}) => {
+    const productId = getProductId(product);
+    const qty = normalizeQty(Number(quantity || 1));
+    const tax = computeTaxForProduct(product);
+    const usesLots = options.usesLots ?? Number(product?.UsesLots || 0);
+    const price =
+      options.unitPriceOverride !== undefined && options.unitPriceOverride !== null
+        ? Number(options.unitPriceOverride)
+        : computePrice(productId, qty);
+    return {
+      LineID: options.lineId || makeLineId(),
+      ProductID: productId,
+      ProductName: getProductName(product),
+      SKU: getProductSku(product),
+      UnitPrice: price,
+      Quantity: qty,
+      DiscountType: "percent",
+      DiscountValue: 0,
+      TaxRateID: options.taxRateId ?? tax.rateId,
+      TaxRatePercentage: options.taxRatePerc ?? tax.ratePerc,
+      IsTaxable: options.isTaxable ?? tax.isTaxable,
+      UsesLots: usesLots ? 1 : 0,
+      ProductLotID: options.lotId || null,
+      LotNumber: options.lotNumber || null,
+      LotExpirationDate: options.lotExpiration || null,
+      IsPack: options.isPack || false,
+      IsPackComponent: options.isPackComponent || false,
+      PackGroupId: options.packGroupId || null,
+      PackParentId: options.packParentId || null,
+      PackParentName: options.packParentName || null,
+      PackComponentQty: options.packComponentQty || null,
+    };
+  };
+
+  const addLineItem = (product, quantity, options = {}) => {
     const productId = getProductId(product);
     if (!productId) {
       setStatus({
         type: "error",
         message: "Unable to add product (missing ID).",
+      });
+      return false;
+    }
+    if (!isProductAvailable(productId)) {
+      setStatus({
+        type: "error",
+        message: "Product not available in this warehouse.",
+      });
+      return false;
+    }
+    const qty = normalizeQty(Number(quantity || 1));
+    const usesLots = options.usesLots ?? Number(product?.UsesLots || 0);
+    const lotId = options.lotId || null;
+    setCart((prev) => {
+      const existing = prev.find(
+        (item) =>
+          item.ProductID === productId &&
+          !item.PackGroupId &&
+          (!usesLots || item.ProductLotID === lotId)
+      );
+      if (existing) {
+        const nextQty = normalizeQty(existing.Quantity + qty);
+        return prev.map((item) =>
+          item.LineID === existing.LineID
+            ? {
+                ...item,
+                Quantity: nextQty,
+                UnitPrice: computePrice(productId, nextQty),
+              }
+            : item
+        );
+      }
+        return [...prev, buildCartItem(product, qty, { ...options, usesLots, lotId })];
+      });
+      return true;
+    };
+
+  const addPackToCart = async (product, components) => {
+    const productId = getProductId(product);
+    if (!productId) {
+      setStatus({
+        type: "error",
+        message: "Unable to add product (missing ID).",
+      });
+      return;
+    }
+    const effectiveWarehouseId = getEffectiveWarehouseId();
+    if (!effectiveWarehouseId) {
+      setStatus({
+        type: "error",
+        message: "Select a warehouse before adding items.",
       });
       return;
     }
@@ -827,84 +1518,333 @@ export default function Pos() {
       });
       return;
     }
-    const price = computePrice(productId, 1);
-    const tax = computeTaxForProduct(product);
-    setCart((prev) => {
-      const existing = prev.find((item) => item.ProductID === productId);
-      if (existing) {
-        return prev.map((item) =>
-          item.ProductID === productId
-            ? {
-                ...item,
-                Quantity: normalizeQty(item.Quantity + 1),
-                UnitPrice: computePrice(
-                  productId,
-                  normalizeQty(item.Quantity + 1)
-                ),
-              }
-            : item
-        );
+    const unavailable = components.find(
+      (row) => !isProductAvailable(row.ComponentProductID)
+    );
+    if (unavailable) {
+      setStatus({
+        type: "error",
+        message: "Pack component not available in this warehouse.",
+      });
+      return;
+    }
+
+    let packLot = null;
+    if (Number(product?.UsesLots || 0) === 1) {
+      packLot = await fetchFefoLot(productId);
+      if (!packLot) {
+        setStatus({
+          type: "error",
+          message: "No available lot for this pack product.",
+        });
+        return;
       }
-      return [
-        ...prev,
-        {
-          ProductID: productId,
-          ProductName: getProductName(product),
-          SKU: getProductSku(product),
-          UnitPrice: price,
-          Quantity: normalizeQty(1),
-          DiscountType: "percent",
-          DiscountValue: 0,
-          TaxRateID: tax.rateId,
-          TaxRatePercentage: tax.ratePerc,
-          IsTaxable: tax.isTaxable,
-        },
-      ];
+    }
+
+    const componentLotMap = new Map();
+    for (const row of components) {
+      const componentProduct =
+        allProducts.find((p) => getProductId(p) === Number(row.ComponentProductID)) ||
+        null;
+      if (!componentProduct || Number(componentProduct?.UsesLots || 0) !== 1) continue;
+      const lot = await fetchFefoLot(Number(row.ComponentProductID));
+      if (!lot) {
+        setStatus({
+          type: "error",
+          message: `No available lot for ${componentProduct.ProductName || "component"}.`,
+        });
+        return;
+      }
+      componentLotMap.set(Number(row.ComponentProductID), lot);
+    }
+
+    setCart((prev) => {
+      const existingPack = prev.find(
+        (item) => item.IsPack && item.ProductID === productId
+      );
+      if (existingPack) {
+        const nextQty = normalizeQty(existingPack.Quantity + 1);
+        return prev
+          .map((item) => {
+            if (item.LineID === existingPack.LineID) {
+              return {
+                ...item,
+                Quantity: nextQty,
+                UnitPrice: computePrice(productId, nextQty),
+              };
+            }
+            if (item.PackGroupId === existingPack.PackGroupId) {
+              return {
+                ...item,
+                Quantity: normalizeQty(nextQty * (item.PackComponentQty || 1)),
+              };
+            }
+            return item;
+          })
+          .filter((item) => item.Quantity > 0);
+      }
+
+      const packGroupId = makeLineId();
+      const packLine = buildCartItem(product, 1, {
+        packGroupId,
+        isPack: true,
+        usesLots: Number(product?.UsesLots || 0) === 1,
+        lotId: packLot?.ProductLotID || null,
+        lotNumber: packLot?.LotNumber || null,
+        lotExpiration: packLot?.ExpirationDate || null,
+      });
+      const componentLines = components
+        .map((row) => {
+          const componentProduct =
+            allProducts.find(
+              (p) => getProductId(p) === Number(row.ComponentProductID)
+            ) || {
+              ProductID: row.ComponentProductID,
+              ProductName: row.ProductName,
+              SKU: row.SKU,
+              IsTaxable: row.IsTaxable,
+              TaxRateID: row.TaxRateID,
+              TaxRatePercentage: row.TaxRatePercentage,
+            };
+          const qty = Number(row.ComponentQuantity || 0);
+          if (qty <= 0) return null;
+          const componentLot = componentLotMap.get(Number(row.ComponentProductID));
+          const usesLots = Number(componentProduct?.UsesLots || 0) === 1;
+          return buildCartItem(componentProduct, qty, {
+            packGroupId,
+            packParentId: productId,
+            packParentName: getProductName(product),
+            packComponentQty: qty,
+            isPackComponent: true,
+            unitPriceOverride: 0,
+            isTaxable: 0,
+            taxRateId: null,
+            taxRatePerc: 0,
+            usesLots,
+            lotId: componentLot?.ProductLotID || null,
+            lotNumber: componentLot?.LotNumber || null,
+            lotExpiration: componentLot?.ExpirationDate || null,
+          });
+        })
+        .filter(Boolean);
+      return [...prev, packLine, ...componentLines];
     });
+  };
+
+  const addProductToCart = async (product) => {
+    const productId = getProductId(product);
+    if (!productId) {
+      setStatus({
+        type: "error",
+        message: "Unable to add product (missing ID).",
+      });
+      return;
+    }
+
+    let components = [];
+    try {
+      const res = await api.get(`/api/product-packs/${productId}`);
+      components = Array.isArray(res.data) ? res.data : [];
+    } catch (err) {
+      components = [];
+    }
+
+    if (components.length) {
+      await addPackToCart(product, components);
+    } else {
+      if (Number(product?.UsesLots || 0) === 1) {
+        if (!getEffectiveWarehouseId()) {
+          setStatus({
+            type: "error",
+            message: "Select a warehouse before adding items.",
+          });
+          return;
+        }
+        const lot = await fetchFefoLot(productId);
+        if (!lot) {
+          setStatus({
+            type: "error",
+            message: "No available lot for this product.",
+          });
+          return;
+        }
+        if (
+          !addLineItem(product, 1, {
+            usesLots: true,
+            lotId: lot.ProductLotID,
+            lotNumber: lot.LotNumber,
+            lotExpiration: lot.ExpirationDate,
+          })
+        ) {
+          return;
+        }
+      } else if (!addLineItem(product, 1)) {
+        return;
+      }
+    }
     setSearchTerm("");
     setSearchResults([]);
     focusSearchSoon();
   };
 
-  const updateQuantity = (id, delta) => {
-    setCart((prev) =>
-      prev
-        .map((item) =>
-          item.ProductID === id
-            ? {
+  const updateQuantity = (lineId, delta) => {
+    setCart((prev) => {
+      const target = prev.find((item) => getLineId(item) === lineId);
+      if (!target || target.IsPackComponent) return prev;
+      const nextQty = normalizeQty((target.Quantity || 0) + delta);
+      if (nextQty <= 0 && target.PackGroupId) {
+        return prev.filter((item) => item.PackGroupId !== target.PackGroupId);
+      }
+      return prev
+        .map((item) => {
+          if (target.PackGroupId && item.PackGroupId === target.PackGroupId) {
+            if (item.IsPack) {
+              return {
                 ...item,
-                Quantity: normalizeQty(item.Quantity + delta),
-                UnitPrice: computePrice(
-                  id,
-                  normalizeQty(item.Quantity + delta)
-                ),
-              }
-            : item
-        )
-        .filter((item) => item.Quantity > 0)
-    );
+                Quantity: nextQty,
+                UnitPrice: computePrice(item.ProductID, nextQty),
+              };
+            }
+            if (item.IsPackComponent) {
+              return {
+                ...item,
+                Quantity: normalizeQty(nextQty * (item.PackComponentQty || 1)),
+              };
+            }
+          }
+          if (!target.PackGroupId && getLineId(item) === lineId) {
+            return {
+              ...item,
+              Quantity: nextQty,
+              UnitPrice: computePrice(item.ProductID, nextQty),
+            };
+          }
+          return item;
+        })
+        .filter((item) => item.Quantity > 0);
+    });
   };
 
-  const updateLineDiscountValue = (id, value) => {
+  const setQuantityValue = (lineId, value) => {
+    const qty = Math.max(0, Math.floor(Number(value) || 0));
+    setCart((prev) => {
+      const target = prev.find((item) => getLineId(item) === lineId);
+      if (!target || target.IsPackComponent) return prev;
+      if (qty <= 0 && target.PackGroupId) {
+        return prev.filter((item) => item.PackGroupId !== target.PackGroupId);
+      }
+      return prev
+        .map((item) => {
+          if (target.PackGroupId && item.PackGroupId === target.PackGroupId) {
+            if (item.IsPack) {
+              return {
+                ...item,
+                Quantity: normalizeQty(qty),
+                UnitPrice: computePrice(item.ProductID, normalizeQty(qty)),
+              };
+            }
+            if (item.IsPackComponent) {
+              return {
+                ...item,
+                Quantity: normalizeQty(qty * (item.PackComponentQty || 1)),
+              };
+            }
+          }
+          if (!target.PackGroupId && getLineId(item) === lineId) {
+            return {
+              ...item,
+              Quantity: normalizeQty(qty),
+              UnitPrice: computePrice(item.ProductID, normalizeQty(qty)),
+            };
+          }
+          return item;
+        })
+        .filter((item) => item.Quantity > 0);
+    });
+  };
+
+  const updateLineDiscountValue = (lineId, value) => {
     const val = Math.max(0, Number(value) || 0);
     setCart((prev) =>
       prev.map((item) =>
-        item.ProductID === id ? { ...item, DiscountValue: val } : item
+        getLineId(item) === lineId ? { ...item, DiscountValue: val } : item
       )
     );
   };
 
-  const updateLineDiscountType = (id, type) => {
+  const updateLineDiscountType = (lineId, type) => {
     const nextType = type === "amount" ? "amount" : "percent";
     setCart((prev) =>
       prev.map((item) =>
-        item.ProductID === id ? { ...item, DiscountType: nextType } : item
+        getLineId(item) === lineId ? { ...item, DiscountType: nextType } : item
       )
     );
   };
 
-  const removeItem = (id) => {
-    setCart((prev) => prev.filter((item) => item.ProductID !== id));
+  const openLotModalForItem = async (item) => {
+    const effectiveWarehouseId = getEffectiveWarehouseId();
+    if (!effectiveWarehouseId) {
+      setStatus({ type: "error", message: "Select a warehouse first." });
+      return;
+    }
+    setLotModalError("");
+    setLotModalLoading(true);
+    try {
+      if (item.IsPack) {
+        const packLines = cart.filter(
+          (line) => line.PackGroupId === item.PackGroupId && line.UsesLots
+        );
+        if (packLines.length === 0) {
+          setLotModalError("No lot-tracked items in this pack.");
+          return;
+        }
+        const optionsByLine = {};
+        for (const line of packLines) {
+          optionsByLine[line.LineID] = await fetchLotsForProduct(line.ProductID);
+        }
+        setLotOptionsByLine(optionsByLine);
+        setLotOptions([]);
+        setLotModal({
+          open: true,
+          mode: "pack",
+          lineId: null,
+          packGroupId: item.PackGroupId,
+        });
+        return;
+      }
+      const options = await fetchLotsForProduct(item.ProductID);
+      setLotOptions(options);
+      setLotOptionsByLine({});
+      setLotModal({
+        open: true,
+        mode: "single",
+        lineId: item.LineID,
+        packGroupId: null,
+      });
+      if (options.length === 0) {
+        setLotModalError("No lots found for this product.");
+      }
+    } finally {
+      setLotModalLoading(false);
+    }
+  };
+
+  const closeLotModal = () => {
+    setLotModal({ open: false, mode: "single", lineId: null, packGroupId: null });
+    setLotOptions([]);
+    setLotOptionsByLine({});
+    setLotModalError("");
+  };
+
+  const removeItem = (lineId) => {
+    setCart((prev) => {
+      const target = prev.find((item) => getLineId(item) === lineId);
+      if (!target) return prev;
+      if (target.PackGroupId) {
+        return prev.filter((item) => item.PackGroupId !== target.PackGroupId);
+      }
+      return prev.filter((item) => getLineId(item) !== lineId);
+    });
   };
 
   const loadTicketByNumber = async (code) => {
@@ -921,6 +1861,7 @@ export default function Pos() {
               item;
             const tax = computeTaxForProduct(prod);
             return {
+              LineID: makeLineId(),
               ProductID: item.ProductID,
               ProductName: item.Description || getProductName(item),
               SKU: getProductSku(item),
@@ -1588,20 +2529,20 @@ export default function Pos() {
           ? Math.max(0, Math.min(Number(item.DiscountValue) || 0, gross))
           : 0;
 
-      return {
-        ProductID: item.ProductID,
-        Description: item.ProductName,
-        Quantity: qty,
-        UnitPrice: effectivePrice,
+        return {
+          ProductID: item.ProductID,
+          Description: item.ProductName,
+          Quantity: qty,
+          UnitPrice: effectivePrice,
         DiscountPercentage: discountPct,
         DiscountAmountItem: discountAmount,
         TaxRatePercentage: item.TaxRatePercentage || 0,
-        TaxRateID: item.TaxRateID || null,
-        IsLineExenta: item.IsTaxable ? 0 : 1,
-        ProductLotID: null,
-        ProductSerialID: null,
-      };
-    });
+          TaxRateID: item.TaxRateID || null,
+          IsLineExenta: item.IsTaxable ? 0 : 1,
+          ProductLotID: item.ProductLotID || null,
+          ProductSerialID: null,
+        };
+      });
 
   const parkTicket = async () => {
     if (documentType !== "TICKET") {
@@ -1714,6 +2655,7 @@ export default function Pos() {
               item;
             const tax = computeTaxForProduct(prod);
             return {
+              LineID: makeLineId(),
               ProductID: item.ProductID,
               ProductName: item.Description,
               SKU: getProductSku(item),
@@ -1722,6 +2664,10 @@ export default function Pos() {
               TaxRateID: item.TaxRateID || tax.rateId || null,
               TaxRatePercentage: item.TaxRatePercentage ?? tax.ratePerc ?? 0,
               IsTaxable: item.IsTaxable ?? tax.isTaxable ?? 0,
+              UsesLots: Number(prod?.UsesLots || 0),
+              ProductLotID: item.ProductLotID || null,
+              LotNumber: item.LotNumber || null,
+              LotExpirationDate: item.ExpirationDate || null,
             };
           })
         );
@@ -2039,14 +2985,16 @@ export default function Pos() {
     if (prev.ticket && !ticketModal) focusSearchSoon();
     if (prev.pin && !pinModal) focusSearchSoon();
     if (prev.payment && !paymentModal) focusSearchSoon();
+    if (prev.lot && !lotModal.open) focusSearchSoon();
     prevModalsRef.current = {
       customer: customerModal,
       employee: employeeModal,
       ticket: ticketModal,
       pin: pinModal,
       payment: paymentModal,
+      lot: lotModal.open,
     };
-  }, [customerModal, employeeModal, ticketModal, pinModal, paymentModal]);
+  }, [customerModal, employeeModal, ticketModal, pinModal, paymentModal, lotModal.open]);
 
   useEffect(() => {
     focusSearchSoon();
@@ -2054,6 +3002,16 @@ export default function Pos() {
   const MIN_MAIN_PERCENT = 70;
   const mainPercent = Math.max(MIN_MAIN_PERCENT, 100 - categoryWidth);
   const sidePercent = Math.max(0, 100 - mainPercent);
+  const lotModalLine =
+    lotModal.open && lotModal.mode === "single"
+      ? cart.find((item) => item.LineID === lotModal.lineId)
+      : null;
+  const packLotLines =
+    lotModal.open && lotModal.mode === "pack"
+      ? cart.filter(
+          (item) => item.PackGroupId === lotModal.packGroupId && item.UsesLots
+        )
+      : [];
 
   return (
     <div
@@ -2061,9 +3019,12 @@ export default function Pos() {
       className="pos-grid"
       onMouseDown={handleSurfaceMouseDown}
       style={{
-        gridTemplateColumns: categoryCollapsed
+        gridTemplateColumns: isMobile
+          ? "1fr"
+          : categoryCollapsed
           ? "minmax(0, 1fr) 44px"
           : `minmax(520px, ${mainPercent}%) 8px minmax(280px, ${sidePercent}%)`,
+        width: "100%",
       }}
     >
       <section className="order-panel card">
@@ -2087,87 +3048,20 @@ export default function Pos() {
                 {selectedCustomer?.CustomerName || t("pos.defaultCustomer")}
               </span>
             </div>
+            <div className="mobile-actions mobile-inline">
+              <button className="btn ghost" onClick={() => setActionsSheet(true)}>
+                <span className="btn-icon" aria-hidden="true">⚡</span>
+              </button>
+              <button className="btn ghost" onClick={() => setCatalogSheet(true)}>
+                <span className="btn-icon" aria-hidden="true">📦</span>
+              </button>
+              <button className="btn ghost" onClick={() => setControlsSheet(true)}>
+                <span className="btn-icon" aria-hidden="true">🎛</span>
+              </button>
+            </div>
           </div>
-          <div className="order-actions">
-            <button
-              className="btn ghost"
-              onClick={handleClose}
-              title={t("pos.dashboard")}
-            >
-              <span className="sidebar-icon" aria-hidden="true">
-                🏠
-              </span>
-              <span>{t("pos.dashboard")}</span>
-            </button>
-            <button
-              className="btn ghost"
-              onClick={handleLogout}
-              title={t("pos.logout")}
-            >
-              <span className="sidebar-icon logout-icon" aria-hidden="true">
-                <svg
-                  viewBox="0 0 24 24"
-                  role="presentation"
-                  focusable="false"
-                  width="18"
-                  height="18"
-                >
-                  <path
-                    d="M10.5 4.5a.75.75 0 0 0-.75-.75h-4a2 2 0 0 0-2 2v12.5a2 2 0 0 0 2 2h4a.75.75 0 0 0 .75-.75V17a.75.75 0 1 0-1.5 0v2H6a.5.5 0 0 1-.5-.5V5.75A.5.5 0 0 1 6 5.25h3v2a.75.75 0 0 0 1.5 0z"
-                    fill="currentColor"
-                  />
-                  <path
-                    d="M14.53 8.47a.75.75 0 0 0-1.06 1.06L15.94 12l-2.47 2.47a.75.75 0 1 0 1.06 1.06l3-3a.75.75 0 0 0 0-1.06z"
-                    fill="currentColor"
-                  />
-                  <path
-                    d="M9.25 12a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5H10a.75.75 0 0 1-.75-.75"
-                    fill="currentColor"
-                  />
-                </svg>
-              </span>
-              <span>{t("pos.logout")}</span>
-            </button>
-            <button
-              className="btn ghost"
-              onClick={() => setCustomerModal(true)}
-              onBlur={focusSearchSoon}
-            >
-              {selectedCustomer?.CustomerName || t("pos.defaultCustomer")}
-            </button>
-            <button
-              className="btn ghost"
-              onClick={() => setEmployeeModal(true)}
-              onBlur={focusSearchSoon}
-            >
-              {t("pos.changeEmployee")}
-            </button>
-            <button
-              className="btn ghost"
-              onClick={parkTicket}
-              disabled={!cart.length || documentType !== "TICKET"}
-            >
-              {t("pos.parkTicket")}
-            </button>
-            <button
-              className="btn ghost"
-              onClick={loadTickets}
-              disabled={documentType !== "TICKET"}
-              onBlur={focusSearchSoon}
-            >
-              {t("pos.loadTicket")}
-            </button>
-            <button
-              className="btn ghost"
-              onClick={() => {
-                setCart([]);
-                setStatus({ type: "", message: "" });
-                focusSearchSoon();
-              }}
-              disabled={!cart.length}
-            >
-              Clear all
-            </button>
+          <div className="order-actions desktop-actions">
+            {renderActionButtons()}
           </div>
         </header>
 
@@ -2258,7 +3152,7 @@ export default function Pos() {
           )}
         </div>
 
-        <div className="order-list">
+      <div className="order-list">
           {cart.length === 0 && <p className="muted">{t("pos.emptyState")}</p>}
           {cart.length > 0 && (
             <div className="order-row order-head">
@@ -2271,154 +3165,239 @@ export default function Pos() {
               <span>Actions</span>
             </div>
           )}
-          {cart.map((item, idx) => (
-            <div
-              className="order-item order-row"
-              key={`${item.ProductID}-${idx}`}
-            >
+          {cart.map((item, idx) => {
+            const lineId = getLineId(item) || `${item.ProductID}-${idx}`;
+            return (
+            <div className="swipe-container" key={lineId}>
+              <div
+                className="swipe-delete-bar"
+                style={{
+                  width: `${Math.min(
+                    80,
+                    Math.max(0, -(swipeOffsets[lineId] || 0))
+                  )}px`,
+                }}
+              >
+                🗑
+              </div>
+              <div
+                className={`order-item order-row swipe-row ${
+                  item.IsPackComponent ? "pack-component" : item.IsPack ? "pack-line" : ""
+                }`}
+                onTouchStart={(e) => handleRowTouchStart(lineId, e)}
+                onTouchMove={(e) => handleRowTouchMove(lineId, e)}
+                onTouchEnd={(e) => handleRowTouchEnd(lineId, e)}
+                style={{
+                  transform: `translateX(${swipeOffsets[lineId] || 0}px)`,
+                  transition:
+                    swipingId === lineId
+                      ? "none"
+                      : "transform 0.15s ease",
+                }}
+              >
               {(() => {
                 const parts = computeLineParts(item, idx);
                 item.__lineParts = parts; // cache for render below
                 return null;
               })()}
-              <div className="order-product">
-                <strong>{item.ProductName}</strong>
-                <p className="muted small">{item.SKU}</p>
-              </div>
+                <div className="order-product">
+                  <strong>{item.ProductName}</strong>
+                  {!item.IsPackComponent && (
+                    <p className="muted small sku-mobile">{item.SKU}</p>
+                  )}
+                  {!item.IsPackComponent && item.UsesLots ? (
+                    <p className="muted small">
+                      Lot: {item.LotNumber || "Select lot"}
+                      {item.LotExpirationDate
+                        ? ` · Exp ${formatShortDate(item.LotExpirationDate)}`
+                        : ""}
+                    </p>
+                  ) : null}
+                </div>
               <div className="qty-controls">
-                <button onClick={() => updateQuantity(item.ProductID, -1)}>
-                  -
-                </button>
-                <span>{item.Quantity}</span>
-                <button onClick={() => updateQuantity(item.ProductID, 1)}>
-                  +
-                </button>
-              </div>
-              <div className="price">
-                {promotionOverrides[idx] ? (
-                  <>
-                    <div
-                      style={{
-                        textDecoration: "line-through",
-                        color: "#999",
-                        fontSize: 12,
-                      }}
-                    >
-                      {currencyFormatter.format(item.UnitPrice)}
-                    </div>
-                    <div style={{ fontWeight: 700 }}>
-                      {currencyFormatter.format(
-                        promotionOverrides[idx].targetPrice
-                      )}
-                    </div>
-                    <div className="muted small">Promo</div>
-                  </>
-                ) : item.ManualOverride &&
-                  item.OriginalUnitPrice !== undefined ? (
-                  <>
-                    <div
-                      style={{
-                        textDecoration: "line-through",
-                        color: "#999",
-                        fontSize: 12,
-                      }}
-                    >
-                      {currencyFormatter.format(item.OriginalUnitPrice)}
-                    </div>
-                    <div style={{ fontWeight: 700 }}>
-                      {currencyFormatter.format(item.UnitPrice)}
-                    </div>
-                    <div className="muted small">Manual</div>
-                  </>
+                {item.IsPackComponent ? (
+                  <span className="qty-static">{item.Quantity}</span>
+                ) : isMobile ? (
+                  <select
+                    className="qty-wheel-select"
+                    value={item.Quantity}
+                    onChange={(e) =>
+                      setQuantityValue(lineId, e.target.value)
+                    }
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                  >
+                    {Array.from({ length: 201 }, (_, i) => i).map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
                 ) : (
-                  currencyFormatter.format(item.UnitPrice)
+                  <>
+                    <button onClick={() => updateQuantity(lineId, -1)}>-</button>
+                    <span
+                      onTouchStart={(e) => handleQtyTouchStart(lineId, e)}
+                      onTouchEnd={(e) => handleQtyTouchEnd(lineId, e)}
+                    >
+                      {item.Quantity}
+                    </span>
+                    <button onClick={() => updateQuantity(lineId, 1)}>+</button>
+                  </>
                 )}
               </div>
-              <div className="discount-cell">
-                <select
-                  value={item.DiscountType || "percent"}
-                  onChange={(e) =>
-                    updateLineDiscountType(item.ProductID, e.target.value)
-                  }
-                  disabled={
-                    Boolean(promotionOverrides[idx]) || item.ManualOverride
-                  }
-                  title={
-                    promotionOverrides[idx]
-                      ? "Line discounts disabled when promo price applies"
-                      : item.ManualOverride
-                      ? "Line discounts disabled when manually overridden"
-                      : ""
-                  }
-                >
-                  <option value="amount">$</option>
-                  <option value="percent">%</option>
-                </select>
-                <input
-                  type="number"
-                  min="0"
-                  value={item.DiscountValue || 0}
-                  onChange={(e) =>
-                    updateLineDiscountValue(item.ProductID, e.target.value)
-                  }
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      if (searchInputRef.current) {
-                        searchInputRef.current.focus();
-                      }
+              {!item.IsPackComponent && (
+                <div className="price">
+                  {promotionOverrides[idx] ? (
+                    <>
+                      <div
+                        style={{
+                          textDecoration: "line-through",
+                          color: "#999",
+                          fontSize: 12,
+                        }}
+                      >
+                        {currencyFormatter.format(item.UnitPrice)}
+                      </div>
+                      <div style={{ fontWeight: 700 }}>
+                        {currencyFormatter.format(
+                          promotionOverrides[idx].targetPrice
+                        )}
+                      </div>
+                      <div className="muted small">Promo</div>
+                    </>
+                  ) : item.ManualOverride &&
+                    item.OriginalUnitPrice !== undefined ? (
+                    <>
+                      <div
+                        style={{
+                          textDecoration: "line-through",
+                          color: "#999",
+                          fontSize: 12,
+                        }}
+                      >
+                        {currencyFormatter.format(item.OriginalUnitPrice)}
+                      </div>
+                      <div style={{ fontWeight: 700 }}>
+                        {currencyFormatter.format(item.UnitPrice)}
+                      </div>
+                      <div className="muted small">Manual</div>
+                    </>
+                  ) : (
+                    currencyFormatter.format(item.UnitPrice)
+                  )}
+                </div>
+              )}
+              {!item.IsPackComponent && (
+                <div className="discount-cell">
+                  <select
+                    value={item.DiscountType || "percent"}
+                    onChange={(e) =>
+                      updateLineDiscountType(lineId, e.target.value)
                     }
-                  }}
-                  disabled={
-                    Boolean(promotionOverrides[idx]) || item.ManualOverride
-                  }
-                />
-              </div>
-              <div className="tax muted small">
-                {item.__lineParts?.rate
-                  ? `${Number(item.__lineParts.rate).toFixed(2)}%`
-                  : "0%"}
-              </div>
-              <div className="price">
-                {currencyFormatter.format(item.__lineParts?.total || 0)}
-              </div>
-              <div
-                className="actions"
-                style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}
-              >
-                <button
-                  className="btn ghost small"
-                  type="button"
-                  onClick={() => openOverrideModal(item, idx)}
-                  title="Override price"
-                >
-                  Override
-                </button>
-                <button
-                  className="delete-item"
-                  onClick={() => removeItem(item.ProductID)}
-                  aria-label="Remove item"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="16"
-                    height="16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                    disabled={
+                      Boolean(promotionOverrides[idx]) || item.ManualOverride
+                    }
+                    title={
+                      promotionOverrides[idx]
+                        ? "Line discounts disabled when promo price applies"
+                        : item.ManualOverride
+                        ? "Line discounts disabled when manually overridden"
+                        : ""
+                    }
                   >
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-                    <path d="M10 11v6" />
-                    <path d="M14 11v6" />
-                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                  </svg>
-                </button>
+                    <option value="amount">$</option>
+                    <option value="percent">%</option>
+                  </select>
+                  <input
+                    type="number"
+                    min="0"
+                    value={item.DiscountValue || 0}
+                    onChange={(e) =>
+                      updateLineDiscountValue(lineId, e.target.value)
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (searchInputRef.current) {
+                          searchInputRef.current.focus();
+                        }
+                      }
+                    }}
+                    disabled={
+                      Boolean(promotionOverrides[idx]) || item.ManualOverride
+                    }
+                  />
+                </div>
+              )}
+              {!item.IsPackComponent && (
+                <div className="tax muted small">
+                  {item.__lineParts?.rate
+                    ? `${Number(item.__lineParts.rate).toFixed(2)}%`
+                    : "0%"}
+                </div>
+              )}
+              {!item.IsPackComponent && (
+                <div className="price">
+                  {currencyFormatter.format(item.__lineParts?.total || 0)}
+                </div>
+              )}
+                {!item.IsPackComponent && (
+                  <div
+                    className="actions"
+                    style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}
+                  >
+                    {(item.IsPack
+                      ? cart.some(
+                          (line) =>
+                            line.PackGroupId === item.PackGroupId && line.UsesLots
+                        )
+                      : item.UsesLots) && (
+                      <button
+                        className="btn ghost small"
+                        type="button"
+                        onClick={() => openLotModalForItem(item)}
+                        title="Change lot"
+                      >
+                        Lots
+                      </button>
+                    )}
+                    <button
+                      className="btn ghost small override-btn"
+                      type="button"
+                      onClick={() => openOverrideModal(item, idx)}
+                      title="Override price"
+                    >
+                      Override
+                    </button>
+                  <button
+                    className="delete-item desktop-delete"
+                    onClick={() => removeItem(lineId)}
+                    aria-label="Remove item"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="16"
+                      height="16"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                      <path d="M10 11v6" />
+                      <path d="M14 11v6" />
+                      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                    </svg>
+                  </button>
+                </div>
+              )}
               </div>
             </div>
-          ))}
+            );
+          })}
           {appliedPromotions.length > 0 && (
             <div
               className="order-item order-row"
@@ -2447,129 +3426,7 @@ export default function Pos() {
           )}
         </div>
         <div className="order-footer">
-          <div className="pos-footer-row top-controls">
-            <div>
-              <p>Document</p>
-              <select
-                value={documentType}
-                onChange={(e) => {
-                  setDocumentType(e.target.value);
-                  focusSearchSoon();
-                }}
-                onBlur={() => focusSearchDelayed(100)}
-              >
-                {documentTypeOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <p>Warehouse</p>
-              <select
-                value={warehouseId || ""}
-                onChange={(e) => {
-                  const newId = Number(e.target.value);
-                  if (cart.length > 0 && warehouseRef.current !== newId) {
-                    // Prevent warehouse change with items in cart
-                    setStatus({
-                      type: "error",
-                      message: "Clear cart before changing warehouse.",
-                    });
-                    // reset select to previous value
-                    setWarehouseId(warehouseRef.current || "");
-                    focusSearchSoon();
-                    return;
-                  }
-                  setWarehouseId(newId);
-                  warehouseRef.current = newId;
-                  focusSearchSoon();
-                }}
-                onBlur={() => focusSearchDelayed(100)}
-                disabled={cart.length > 0}
-              >
-                {warehouses.map((w) => (
-                  <option key={w.WarehouseID} value={w.WarehouseID}>
-                    {w.WarehouseName}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <p>Price list</p>
-              <select
-                value={activePriceListId || ""}
-                onChange={(e) => {
-                  setActivePriceListId(
-                    e.target.value ? Number(e.target.value) : null
-                  );
-                  focusSearchSoon();
-                }}
-                onBlur={() => focusSearchDelayed(100)}
-              >
-                <option value="">Base price</option>
-                {priceLists.map((pl) => (
-                  <option key={pl.PriceListID} value={pl.PriceListID}>
-                    {pl.Name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <div className="discount-controls">
-                <label>
-                  Discount Type
-                  <select
-                    value={discountType}
-                    onChange={(e) => setDiscountType(e.target.value)}
-                    disabled={
-                      Object.keys(promotionOverrides).length > 0 ||
-                      cart.some((c) => c.ManualOverride)
-                    }
-                    title={
-                      Object.keys(promotionOverrides).length > 0
-                        ? "Global discount disabled when promo price applies"
-                        : cart.some((c) => c.ManualOverride)
-                        ? "Global discount disabled when manual override is active"
-                        : ""
-                    }
-                  >
-                    <option value="amount">$</option>
-                    <option value="percent">%</option>
-                  </select>
-                </label>
-                <label>
-                  Value
-                  <input
-                    type="number"
-                  value={discountValue}
-                  onChange={(e) => setDiscountValue(e.target.value)}
-                  min="0"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      if (searchInputRef.current) {
-                        searchInputRef.current.focus();
-                      }
-                    }
-                  }}
-                  disabled={
-                    Object.keys(promotionOverrides).length > 0 ||
-                    cart.some((c) => c.ManualOverride)
-                  }
-                  title={
-                      Object.keys(promotionOverrides).length > 0
-                        ? "Global discount disabled when promo price applies"
-                        : cart.some((c) => c.ManualOverride)
-                        ? "Global discount disabled when manual override is active"
-                        : ""
-                    }
-                  />
-                </label>
-              </div>
-            </div>
-          </div>
+          {renderControlsContent()}
 
           <div className="pos-footer-row totals-row">
             <div>
@@ -2585,7 +3442,7 @@ export default function Pos() {
               <strong>-{currencyFormatter.format(totalDiscounts)}</strong>
             </div>
             {appliedPromotions.length > 0 && (
-              <div>
+              <div className="promotions-summary">
                 <p>Promotions</p>
                 <div className="muted small">
                   {appliedPromotions.map((p) => (
@@ -2607,7 +3464,8 @@ export default function Pos() {
                 onClick={handlePrintReceipt}
                 disabled={!cart.length || checkoutLoading}
               >
-                Print receipt
+                <span className="btn-icon" aria-hidden="true">🖨️</span>
+                <span className="btn-label">Print receipt</span>
               </button>
               {documentType === "TICKET" ? (
                 <button
@@ -2616,20 +3474,8 @@ export default function Pos() {
                   disabled={!cart.length || checkoutLoading}
                   title="Save Ticket"
                 >
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="18"
-                    height="18"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11.17a2 2 0 0 1 1.41.59l1.83 1.83A2 2 0 0 1 20 6.83V19a2 2 0 0 1-1 1.73" />
-                    <path d="M17 21v-8H7v8" />
-                    <path d="M7 3v5h8" />
-                  </svg>
+                  <span className="btn-icon" aria-hidden="true">💾</span>
+                  <span className="btn-label">Save</span>
                 </button>
               ) : (
                 <>
@@ -2638,14 +3484,18 @@ export default function Pos() {
                     onClick={handleSave}
                     disabled={!cart.length || checkoutLoading}
                   >
-                    Save
+                    <span className="btn-icon" aria-hidden="true">💾</span>
+                    <span className="btn-label">Save</span>
                   </button>
                   <button
                     className="btn primary"
                     onClick={handleCharge}
                     disabled={!cart.length || checkoutLoading}
                   >
-                    {checkoutLoading ? "Processing..." : "Charge"}
+                    <span className="btn-icon" aria-hidden="true">⚡</span>
+                    <span className="btn-label">
+                      {checkoutLoading ? "Processing..." : "Charge"}
+                    </span>
                   </button>
                 </>
               )}
@@ -2674,124 +3524,71 @@ export default function Pos() {
       <div
         className={`catalog-container ${categoryCollapsed ? "collapsed" : ""}`}
       >
-        {!categoryCollapsed && (
-          <aside className="catalog-panel card">
-            <div className="catalog-header">
-              <div className="catalog-actions">
-                {activeCategoryId && (
-                  <>
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      title="Home"
-                      onClick={resetCategoryView}
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M3 11L12 3l9 8" />
-                        <path d="M9 21V12h6v9" />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      title="Back to categories"
-                      onClick={resetCategoryView}
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <polyline points="15 18 9 12 15 6" />
-                      </svg>
-                    </button>
-                  </>
-                )}
-                <h3>{activeCategoryId ? "Products" : "Categories"}</h3>
-              </div>
-            </div>
-            <div className="catalog-grid">
-              {!activeCategoryId &&
-                (() => {
-                  const categoriesToShow =
-                    (availableCategories && availableCategories.length
-                      ? availableCategories
-                      : categories && categories.length
-                      ? categories
-                      : null) || [];
-                  const productsToShow = availableProducts.length
-                    ? availableProducts
-                    : allProducts;
-                  if (categoriesToShow.length > 0) {
-                    return categoriesToShow.map((category) => (
-                      <button
-                        key={getCategoryKey(category.ProductCategoryID)}
-                        className="category"
-        onClick={() => {
-          setActiveCategoryId(getCategoryKey(category.ProductCategoryID));
-          focusSearchSoon();
-        }}
-                      >
-                        {category.CategoryName}
-                      </button>
-                    ));
-                  }
-                  return productsToShow.map((product) => (
-                    <button
-                      key={product.ProductID}
-                      className="product-btn"
-                      onClick={() => addProductToCart(product)}
-                    >
-                      {product.ProductName}
-                    </button>
-                  ));
-                })()}
-              {activeCategoryId &&
-                filteredCategoryProducts(activeCategoryId)
-                  .filter((p) => isProductAvailable(getProductId(p)))
-                  .map((product) => (
-                    <button
-                      key={product.ProductID}
-                      className="product-btn"
-                      onClick={() => addProductToCart(product)}
-                    >
-                      {product.ProductName}
-                    </button>
-                  ))}
-              {activeCategoryId &&
-                filteredCategoryProducts(activeCategoryId).filter((p) =>
-                  isProductAvailable(getProductId(p))
-                ).length === 0 && (
-                  <p className="muted">No products in this category.</p>
-                )}
-            </div>
-          </aside>
-        )}
+        {!categoryCollapsed && renderCatalogContent()}
         <button
           className={`category-toggle ${categoryCollapsed ? "show" : "hide"}`}
-        onClick={() => {
-          setCategoryCollapsed((prev) => !prev);
-          focusSearchSoon();
-        }}
+          onClick={() => {
+            setCategoryCollapsed((prev) => !prev);
+            focusSearchSoon();
+          }}
           aria-label={categoryCollapsed ? "Show categories" : "Hide categories"}
         >
           {categoryCollapsed ? ">" : "<"}
         </button>
       </div>
+
+      {actionsSheet && (
+        <div className="sheet-backdrop" onClick={closeActionsSheet}>
+          <div
+            className="mobile-sheet left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sheet-header">
+              <h3>Quick actions</h3>
+              <button className="btn ghost" onClick={closeActionsSheet}>
+                Close
+              </button>
+            </div>
+            <div className="sheet-body">
+              <div className="order-actions vertical">{renderActionButtons()}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {catalogSheet && (
+        <div className="sheet-backdrop" onClick={closeCatalogSheet}>
+          <div
+            className="mobile-sheet right"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sheet-header">
+              <h3>Products</h3>
+              <button className="btn ghost" onClick={closeCatalogSheet}>
+                Close
+              </button>
+            </div>
+            <div className="sheet-body">{renderCatalogContent()}</div>
+          </div>
+        </div>
+      )}
+
+      {controlsSheet && (
+        <div className="sheet-backdrop" onClick={closeControlsSheet}>
+          <div
+            className="mobile-sheet bottom"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sheet-header">
+              <h3>Controls</h3>
+              <button className="btn ghost" onClick={closeControlsSheet}>
+                Close
+              </button>
+            </div>
+            <div className="sheet-body">{renderControlsContent()}</div>
+          </div>
+        </div>
+      )}
 
       {ticketModal && (
         <div className="modal">
@@ -2833,6 +3630,94 @@ export default function Pos() {
               ))}
             </ul>
             <button className="btn ghost" onClick={() => setTicketModal(false)}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {lotModal.open && (
+        <div className="modal">
+          <div className="modal-content">
+            <h3>Lots</h3>
+            {lotModalError && <p className="status error">{lotModalError}</p>}
+            {lotModalLoading && <p className="muted">Loading lots...</p>}
+            {lotModal.mode === "single" && lotModalLine && (
+              <>
+                <div className="stack">
+                  <strong>{lotModalLine.ProductName}</strong>
+                  <span className="muted small">{lotModalLine.SKU}</span>
+                </div>
+                <label>
+                  Lot
+                  <select
+                    value={lotModalLine.ProductLotID || ""}
+                    onChange={(e) => {
+                      const selected = lotOptions.find(
+                        (lot) => String(lot.ProductLotID) === e.target.value
+                      );
+                      applyLotToLine(lotModalLine.LineID, selected || null);
+                    }}
+                  >
+                    <option value="">Select lot</option>
+                    {lotOptions.map((lot) => (
+                      <option key={lot.ProductLotID} value={lot.ProductLotID}>
+                        {lot.LotNumber} (qty {Number(lot.Quantity || 0)}
+                        {lot.ExpirationDate
+                          ? `, exp ${formatShortDate(lot.ExpirationDate)}`
+                          : ""}
+                        )
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            )}
+            {lotModal.mode === "pack" && (
+              <>
+                {packLotLines.length === 0 ? (
+                  <p className="muted">No lot-tracked items in this pack.</p>
+                ) : (
+                  <div className="entity-list">
+                    {packLotLines.map((line) => {
+                      const options = lotOptionsByLine[line.LineID] || [];
+                      return (
+                        <div key={line.LineID} className="entity-row">
+                          <div className="stack">
+                            <span className="entity-name">{line.ProductName}</span>
+                            <span className="muted small">{line.SKU}</span>
+                          </div>
+                          <div className="inline-inputs">
+                            <select
+                              value={line.ProductLotID || ""}
+                              onChange={(e) => {
+                                const selected = options.find(
+                                  (lot) =>
+                                    String(lot.ProductLotID) === e.target.value
+                                );
+                                applyLotToLine(line.LineID, selected || null);
+                              }}
+                            >
+                              <option value="">Select lot</option>
+                              {options.map((lot) => (
+                                <option key={lot.ProductLotID} value={lot.ProductLotID}>
+                                  {lot.LotNumber} (qty {Number(lot.Quantity || 0)}
+                                  {lot.ExpirationDate
+                                    ? `, exp ${formatShortDate(lot.ExpirationDate)}`
+                                    : ""}
+                                  )
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+            <button className="btn ghost" onClick={closeLotModal}>
               Close
             </button>
           </div>

@@ -538,33 +538,45 @@ router.post("/", async (req, res) => {
         ]
       );
 
-      // Ensure inventory level row exists
+      const lotId = ci.ProductLotID || null;
       const [invRows] = await conn.query(
-         `SELECT ProductInventoryLevelID, StockQuantity
+        `SELECT ProductInventoryLevelID, StockQuantity
          FROM ProductInventoryLevels
-         WHERE ProductID = ? AND WarehouseID = ?
+         WHERE ProductID = ? AND WarehouseID = ? AND
+               ((ProductLotID IS NULL AND ? IS NULL) OR ProductLotID = ?)
          LIMIT 1`,
-        [ci.ProductID, resolvedWarehouseId]
+        [ci.ProductID, resolvedWarehouseId, lotId, lotId]
       );
 
+      let pilId;
       if (invRows.length === 0) {
-        // create baseline row at 0, then subtract
-        await conn.query(
+        const [insertLevel] = await conn.query(
           `INSERT INTO ProductInventoryLevels (
              ProductID, WarehouseID, StockQuantity, ReservedQuantity,
              MinStockLevel, MaxStockLevel, ProductLotID
-           ) VALUES (?, ?, 0, 0, NULL, NULL, NULL)`,
-          [ci.ProductID, resolvedWarehouseId]
+           ) VALUES (?, ?, 0, 0, NULL, NULL, ?)`,
+          [ci.ProductID, resolvedWarehouseId, lotId]
         );
+        pilId = insertLevel.insertId;
+      } else {
+        pilId = invRows[0].ProductInventoryLevelID;
       }
 
-      // reduce stock
       await conn.query(
         `UPDATE ProductInventoryLevels
          SET StockQuantity = StockQuantity - ?, LastUpdatedAt = NOW()
-         WHERE ProductID = ? AND WarehouseID = ?`,
-        [ci.Quantity, ci.ProductID, resolvedWarehouseId]
+         WHERE ProductInventoryLevelID = ?`,
+        [ci.Quantity, pilId]
       );
+
+      if (lotId) {
+        await conn.query(
+          `INSERT INTO ProductLotInventory (ProductLotID, WarehouseID, Quantity)
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE Quantity = Quantity + VALUES(Quantity)`,
+          [lotId, resolvedWarehouseId, -ci.Quantity]
+        );
+      }
 
       // inventory transaction
     await conn.query(

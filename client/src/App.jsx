@@ -15,6 +15,7 @@ import UnitsPage from "./pages/UnitsPage";
 import WarehousesPage from "./pages/WarehousesPage";
 import WarehouseAddStock from "./pages/WarehouseAddStock";
 import InventoryPage from "./pages/InventoryPage";
+import StockDetails from "./pages/StockDetails";
 import PriceListsPage from "./pages/PriceListsPage";
 import PromotionCreate from "./pages/PromotionCreate";
 import PromotionsPage from "./pages/PromotionsPage";
@@ -56,11 +57,11 @@ function App() {
                 <Route path="/company/setup" element={<CompanySetup />} />
                   <Route path="/employees/onboarding" element={<EmployeeOnboarding />} />
                   <Route path="/products" element={<ProductList />} />
-                  <Route path="/products/new" element={<ProductCreate />} />
-                  <Route path="/products/import" element={<ProductImport />} />
-                  <Route path="/products/custom-fields" element={<ProductCustomFields />} />
-                  <Route path="/products/export" element={<ProductExport />} />
-                  <Route path="/products/:id" element={<ProductCreate />} />
+                <Route path="/products/new" element={<ProductCreate />} />
+                <Route path="/products/import" element={<ProductImport />} />
+                <Route path="/products/custom-fields" element={<ProductCustomFields />} />
+                <Route path="/products/export" element={<ProductExport />} />
+                <Route path="/products/:id" element={<ProductCreate />} />
                   <Route path="/customers" element={<CustomersPage />} />
                   <Route path="/customers/:id" element={<CustomerDetail />} />
                   <Route path="/customers/new" element={<CustomerFormPage />} />
@@ -72,6 +73,7 @@ function App() {
                   <Route path="/warehouses" element={<WarehousesPage />} />
                   <Route path="/warehouses/add-stock" element={<WarehouseAddStock />} />
                   <Route path="/inventory" element={<InventoryPage />} />
+                  <Route path="/inventory/:productId/:warehouseId/details" element={<StockDetails />} />
                   <Route path="/price-lists" element={<PriceListsPage />} />
                   <Route path="/promotions/new" element={<PromotionCreate />} />
                   <Route path="/promotions" element={<PromotionsPage />} />

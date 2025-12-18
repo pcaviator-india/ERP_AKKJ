@@ -44,6 +44,7 @@ export default function ProductList() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [trackingFilter, setTrackingFilter] = useState("all"); // all | lots | serial | untracked
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [sortField, setSortField] = useState("ProductName");
   const [sortDir, setSortDir] = useState("asc");
@@ -90,6 +91,10 @@ export default function ProductList() {
         }
         if (typeFilter === "active" && !p.IsActive) return false;
         if (typeFilter === "inactive" && p.IsActive) return false;
+        if (trackingFilter === "lots" && Number(p.UsesLots || 0) !== 1) return false;
+        if (trackingFilter === "serial" && Number(p.UsesSerials || 0) !== 1) return false;
+        if (trackingFilter === "untracked" && (Number(p.UsesLots || 0) === 1 || Number(p.UsesSerials || 0) === 1))
+          return false;
         if (!term) return true;
         return (
           (p.ProductName || "").toLowerCase().includes(term) ||
@@ -111,7 +116,7 @@ export default function ProductList() {
       return String(aVal).localeCompare(String(bVal)) * dir;
     });
     return sorted;
-  }, [products, search, categoryFilter, typeFilter, sortField, sortDir]);
+  }, [products, search, categoryFilter, typeFilter, trackingFilter, sortField, sortDir]);
 
   return (
     <div className="page product-list-page">
@@ -205,6 +210,15 @@ export default function ProductList() {
             <option value="all">{t("products.filterAll")}</option>
             <option value="active">{t("products.filterActive")}</option>
             <option value="inactive">{t("products.filterInactive")}</option>
+          </select>
+          <select
+            value={trackingFilter}
+            onChange={(e) => setTrackingFilter(e.target.value)}
+          >
+            <option value="all">All tracking</option>
+            <option value="lots">Lots tracked</option>
+            <option value="serial">Serial tracked</option>
+            <option value="untracked">Not tracked</option>
           </select>
         </div>
         <p className="muted small">{t("products.count", { count: filtered.length })}</p>

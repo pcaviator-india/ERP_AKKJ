@@ -28,12 +28,10 @@ const navItems = [
     ],
   },
   {
-    labelKey: "nav.warehouses",
-    icon: "\u{1F3E2}",
-    children: [
-      { labelKey: "nav.manageWarehouses", path: "/warehouses", icon: "\u{1F4C1}", perm: "warehouses.manage" },
-      { labelKey: "nav.addToWarehouse", path: "/warehouses/add-stock", icon: "\u2795", perm: "inventory.adjust" },
-    ],
+    labelKey: "nav.manageWarehouses",
+    path: "/warehouses",
+    icon: "\u{1F4C1}",
+    perm: "warehouses.manage",
   },
   {
     labelKey: "nav.settings",
@@ -193,7 +191,14 @@ export default function DashboardLayout() {
               <p className="muted">{t("dashboard.subtitle")}</p>
             </div>
             <div className="dashboard-shortcuts" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span role="img" aria-label="Language">??</span>
+              <span className="sidebar-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" role="presentation" focusable="false">
+                  <path
+                    d="M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19zm7.7 8.6h-3.4a15 15 0 0 0-1.2-4.7 7.6 7.6 0 0 1 4.6 4.7zm-5.1 0h-5.2c.2-1.6.6-3.1 1.1-4.4.4-1 .9-1.6 1.5-1.6s1.1.6 1.5 1.6c.5 1.3.9 2.8 1.1 4.4zm-8.3 0H2.9a7.6 7.6 0 0 1 4.6-4.7c-.5 1.4-.9 3-1.2 4.7zm0 1.8c.2 1.7.6 3.2 1.2 4.7a7.6 7.6 0 0 1-4.6-4.7h3.4zm3.1 0h5.2c-.2 1.6-.6 3.1-1.1 4.4-.4 1-.9 1.6-1.5 1.6s-1.1-.6-1.5-1.6c-.5-1.3-.9-2.8-1.1-4.4zm6.6 0h3.4a7.6 7.6 0 0 1-4.6 4.7c.6-1.5 1-3 1.2-4.7z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </span>
               <select
                 className="lang-switch"
                 value={lang}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "../api/http";
 import { configureQzSecurity, ensureQzConnection } from "../utils/qz";
 import { printWithFallback } from "../services/printService";
@@ -16,12 +16,16 @@ export default function AccessoriesSettings() {
   const [status, setStatus] = useState({ type: "", message: "" });
   const [testing, setTesting] = useState(false);
   const [testingQz, setTestingQz] = useState(false);
+  const [ready, setReady] = useState(false);
+  const autosaveTimerRef = useRef(null);
+  const autosaveIdRef = useRef(0);
 
   const loadConfig = async () => {
     setLoading(true);
     try {
       const { data } = await api.get("/api/config");
       setConfig(data || {});
+      setReady(true);
     } catch (err) {
       setStatus({ type: "error", message: "Failed to load config" });
     } finally {
@@ -31,48 +35,88 @@ export default function AccessoriesSettings() {
 
   useEffect(() => {
     loadConfig();
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+      }
+    };
   }, []);
 
   const accessories = config?.accessories || {};
 
   const updateField = (field, value) => {
-    setConfig((prev) => ({
-      ...(prev || {}),
-      accessories: {
-        ...(prev?.accessories || {}),
-        [field]: value,
-        defaultPrinters: { ...(prev?.accessories?.defaultPrinters || {}) },
-      },
-    }));
+    setConfig((prev) => {
+      const next = {
+        ...(prev || {}),
+        accessories: {
+          ...(prev?.accessories || {}),
+          [field]: value,
+          defaultPrinters: { ...(prev?.accessories?.defaultPrinters || {}) },
+        },
+      };
+      queueAutosave(next.accessories);
+      return next;
+    });
   };
 
   const updatePrinter = (size, value) => {
-    setConfig((prev) => ({
-      ...(prev || {}),
-      accessories: {
-        ...(prev?.accessories || {}),
-        defaultPrinters: {
-          ...(prev?.accessories?.defaultPrinters || {}),
-          [size]: value,
+    setConfig((prev) => {
+      const next = {
+        ...(prev || {}),
+        accessories: {
+          ...(prev?.accessories || {}),
+          defaultPrinters: {
+            ...(prev?.accessories?.defaultPrinters || {}),
+            [size]: value,
+          },
         },
-      },
-    }));
+      };
+      queueAutosave(next.accessories);
+      return next;
+    });
+  };
+
+  const persistAccessories = async (nextAccessories, { silent } = {}) => {
+    if (!nextAccessories) return;
+    const saveId = ++autosaveIdRef.current;
+    if (!silent) {
+      setSaving(true);
+      setStatus({ type: "", message: "" });
+    }
+    try {
+      const { data } = await api.patch("/api/config", {
+        updates: { accessories: nextAccessories },
+      });
+      if (data && autosaveIdRef.current === saveId) {
+        setConfig((prev) => ({ ...(prev || {}), ...data }));
+      }
+      if (!silent) {
+        setStatus({ type: "success", message: "Accessories saved" });
+      }
+    } catch (err) {
+      if (!silent) {
+        setStatus({ type: "error", message: "Failed to save accessories" });
+      }
+    } finally {
+      if (!silent) {
+        setSaving(false);
+      }
+    }
+  };
+
+  const queueAutosave = (nextAccessories) => {
+    if (!ready) return;
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+    autosaveTimerRef.current = setTimeout(() => {
+      persistAccessories(nextAccessories, { silent: true });
+    }, 600);
   };
 
   const handleSave = async () => {
-    if (!config) return;
-    setSaving(true);
-    setStatus({ type: "", message: "" });
-    try {
-      await api.patch("/api/config", {
-        updates: { accessories: config.accessories },
-      });
-      setStatus({ type: "success", message: "Accessories saved" });
-    } catch (err) {
-      setStatus({ type: "error", message: "Failed to save accessories" });
-    } finally {
-      setSaving(false);
-    }
+    if (!config?.accessories) return;
+    await persistAccessories(config.accessories, { silent: false });
   };
 
   const handleTestPrint = async () => {

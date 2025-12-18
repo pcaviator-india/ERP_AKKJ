@@ -34,6 +34,9 @@ const uploadsRouter = require("./routes/uploads");
 const promotionsRouter = require("./routes/promotions");
 const customFieldsRouter = require("./routes/customFields");
 const priceListsRouter = require("./routes/priceLists");
+const productPacksRouter = require("./routes/productPacks");
+const productLotsRouter = require("./routes/productLots");
+const productSerialsRouter = require("./routes/productSerials");
 const rolesRouter = require("./routes/roles");
 const taxRatesRouter = require("./routes/taxRates");
 const customerScreenRouter = require("./routes/customerScreen");
@@ -80,12 +83,23 @@ const inventoryGuard = requireMethodPermission({
   DELETE: "inventory.adjust",
 });
 
+const lotGuard = requireMethodPermission({
+  GET: null,
+  POST: "inventory.adjust",
+  PUT: "inventory.adjust",
+  DELETE: "inventory.adjust",
+  "*": "inventory.adjust",
+});
+
 // Protected
 app.use("/api/companies", authMiddleware, requireWritePermission("config.manage"), companiesRouter);
 app.use("/api/units", authMiddleware, requireWritePermission("products.manage"), unitsRouter);
 app.use("/api/categories", authMiddleware, requireWritePermission("products.manage"), categoriesRouter);
 app.use("/api/brands", authMiddleware, requireWritePermission("products.manage"), brandsRouter);
 app.use("/api/products", authMiddleware, requireWritePermission("products.manage"), productsRouter);
+app.use("/api/product-packs", authMiddleware, requireWritePermission("products.manage"), productPacksRouter);
+app.use("/api/product-lots", authMiddleware, lotGuard, productLotsRouter);
+app.use("/api/product-serials", authMiddleware, inventoryGuard, productSerialsRouter);
 app.use("/api/customer-groups", authMiddleware, requireWritePermission("customers.manage"), customerGroupsRouter);
 app.use("/api/customers", authMiddleware, requireWritePermission("customers.manage"), customersRouter);
 app.use("/api/sales", authMiddleware, salesGuard, salesTicketsRouter);
@@ -105,7 +119,7 @@ app.use("/api/payment-methods", authMiddleware, requireWritePermission("payments
 app.use("/api/bank-accounts", authMiddleware, requireWritePermission("payments.manage"), bankAccountsRouter);
 app.use("/api/document-sequences", authMiddleware, requireWritePermission("config.manage"), documentSequencesRouter);
 app.use("/api/employees", authMiddleware, requireWritePermission("employees.manage"), employeesRouter);
-app.use("/api/config", authMiddleware, requireWritePermission("config.manage"), configRouter);
+app.use("/api/config", authMiddleware, configRouter);
 app.use("/api/custom-fields", authMiddleware, requireWritePermission("config.manage"), customFieldsRouter);
 app.use("/api/price-lists", authMiddleware, requireWritePermission("priceLists.manage"), priceListsRouter);
 app.use("/api/uploads", authMiddleware, uploadsRouter);

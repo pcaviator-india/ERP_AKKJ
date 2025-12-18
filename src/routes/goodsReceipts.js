@@ -251,6 +251,15 @@ router.post("/", async (req, res) => {
         pilId = current.ProductInventoryLevelID;
       }
 
+      if (ProductLotID) {
+        await conn.query(
+          `INSERT INTO ProductLotInventory (ProductLotID, WarehouseID, Quantity)
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE Quantity = Quantity + VALUES(Quantity)`,
+          [ProductLotID, WarehouseID, QuantityReceived]
+        );
+      }
+
       // Insert InventoryTransactions row (PurchaseReceived)
       await conn.query(
         `INSERT INTO InventoryTransactions

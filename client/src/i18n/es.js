@@ -6,6 +6,7 @@
     customers: "Clientes",
     products: "Productos",
     addProduct: "Agregar Producto",
+    productPacks: "Paquetes de productos",
     customFields: "Campos personalizados",
     inventory: "Inventario",
     priceLists: "Listas de Precios",
@@ -99,17 +100,7 @@
     loadError: "No se pudieron cargar las bodegas.",
     selectedLabel: "Seleccionado",
   },
-  dashboard: {
-    preflightTitle: "Checklist de configuración POS",
-    preflightSubtitle: "Completa esto antes de comenzar a vender.",
-    chkCompany: "Perfil de empresa completo",
-    chkWarehouse: "Al menos una bodega (con predeterminada)",
-    chkUnits: "Unidades de medida creadas",
-    chkCategoriesBrands: "Categorías y marcas agregadas",
-    chkPayments: "Métodos de pago configurados",
-    chkProducts: "Al menos un producto creado",
-  },
-  priceLists: {
+    priceLists: {
     title: "Listas de precios",
     subtitle: "Crea listas y agrega tramos: establece cantidad mínima y precio por producto.",
     newList: "Nombre de nueva lista",
@@ -227,6 +218,7 @@
     taxable: "Gravado",
     taxRate: "Tasa de IVA",
     serviceItem: "Servicio",
+    usesLots: "Usar lotes",
     yes: "S\u00ed",
     no: "No",
     weight: "Peso",
@@ -256,6 +248,22 @@
     uploadError: "Error al subir la imagen",
   },
   dashboard: {
+    preflightTitle: "Checklist de configuracion POS",
+    preflightSubtitle: "Completa esto antes de comenzar a vender.",
+    chkCompany: "Perfil de empresa completo",
+    chkCompanyDetails: "Datos de la empresa completos",
+    chkTaxRates: "Impuestos configurados",
+    chkCustomers: "Al menos un cliente agregado",
+    chkCategories: "Categorias agregadas",
+    chkCategoriesBrands: "Categorias y marcas agregadas",
+    chkWarehouse: "Al menos una bodega (con predeterminada)",
+    chkUnits: "Unidades de medida creadas",
+    chkProducts: "Al menos un producto creado",
+    chkEmployees: "Empleados agregados",
+    chkPromotions: "Promociones creadas",
+    chkPriceLists: "Listas de precios creadas",
+    chkPrinterSettings: "Configuracion de impresora lista",
+    chkPayments: "Metodos de pago configurados",
     welcome: "Bienvenido",
     subtitle: "Administra tu empresa, ventas e inventario.",
     companyInfo: "Informaci\u00f3n de la Empresa",
@@ -401,8 +409,6 @@
     charge: "Cobrar",
   },
 };
-
-
 
 
 
