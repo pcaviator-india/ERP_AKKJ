@@ -22,6 +22,9 @@
     companyInfo: "Company Info",
     inviteEmployee: "Invite Employee",
     launchPos: "Launch POS",
+    suppliers: "Suppliers",
+    purchaseOrders: "Purchase Orders",
+    directPurchases: "Direct Purchases",
     roles: "Roles",
     settings: "Settings",
     receipts: "Receipts",
@@ -84,7 +87,8 @@
   },
   warehouseAdd: {
     title: "Add products to warehouse",
-    description: "Pick a warehouse, search a product, and set its starting stock and thresholds.",
+    description:
+      "Pick a warehouse, search a product, and set its starting stock and thresholds.",
     warehouse: "Warehouse",
     productSearch: "Product search",
     productPlaceholder: "Type 2+ characters...",
@@ -106,7 +110,8 @@
     description: "Browse, filter, and manage your products.",
     import: "Import",
     export: "Export",
-    importDescription: "Upload images first (optional), then upload CSV/XLSX, map columns, preview, and import.",
+    importDescription:
+      "Upload images first (optional), then upload CSV/XLSX, map columns, preview, and import.",
     importStepsTitle: "Import steps",
     importImages: "Images",
     importUploadImages: "Upload images",
@@ -137,7 +142,8 @@
     importParseError: "Failed to parse file.",
     importNoData: "No data to preview.",
 
-    importDescription: "Upload images first (optional), then upload CSV/XLSX, map columns, preview, and import.",
+    importDescription:
+      "Upload images first (optional), then upload CSV/XLSX, map columns, preview, and import.",
     importStepsTitle: "Import steps",
     add: "Add Product",
     search: "Search products...",
@@ -180,7 +186,8 @@
   },
   priceLists: {
     title: "Price Lists",
-    subtitle: "Create lists and add tiers: set min quantity and price per product.",
+    subtitle:
+      "Create lists and add tiers: set min quantity and price per product.",
     newList: "New price list name",
     create: "Create",
     created: "Price list created",
@@ -304,7 +311,8 @@
     unlimitedShort: "Unlimited",
     import: "Import",
     export: "Export",
-    importDescription: "Upload images first (optional), then upload CSV/XLSX, map columns, preview, and import.",
+    importDescription:
+      "Upload images first (optional), then upload CSV/XLSX, map columns, preview, and import.",
     importStepsTitle: "Import steps",
     importImages: "Images",
     importUploadImages: "Upload images",
@@ -387,7 +395,8 @@
     changeEmployee: "Change Employee",
     parkTicket: "Park Ticket",
     loadTicket: "Load Ticket",
-    searchPlaceholder: "Scan barcode / SKU / product name (use TKT-xxxx to load ticket)",
+    searchPlaceholder:
+      "Scan barcode / SKU / product name (use TKT-xxxx to load ticket)",
     emptyState: "No items yet. Scan or search to add products.",
     product: "Product",
     qty: "Qty",

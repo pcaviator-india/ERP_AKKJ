@@ -18,6 +18,7 @@ router.get("/", async (req, res) => {
         CompanyName,
         LegalName,
         TaxID,
+        AddressLine1,
         City,
         CountryCode,
         Email,
@@ -59,6 +60,7 @@ router.get("/:id", async (req, res) => {
         CompanyName,
         LegalName,
         TaxID,
+        AddressLine1,
         City,
         CountryCode,
         Email,
@@ -89,6 +91,8 @@ router.post("/", async (req, res) => {
 
   const { CompanyName, LegalName, TaxID, City, CountryCode, Email } = req.body;
 
+  // Accept AddressLine1 from client (address field)
+  const { AddressLine1 } = req.body;
   if (!CompanyName) {
     return res.status(400).json({ error: "CompanyName is required" });
   }
@@ -96,9 +100,9 @@ router.post("/", async (req, res) => {
   try {
     const [result] = await pool.query(
       `INSERT INTO Companies 
-        (CompanyName, LegalName, TaxID, City, CountryCode, Email, IsActive)
-       VALUES (?, ?, ?, ?, ?, ?, 1)`,
-      [CompanyName, LegalName, TaxID, City, CountryCode, Email]
+        (CompanyName, LegalName, TaxID, City, CountryCode, AddressLine1, Email, IsActive)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+      [CompanyName, LegalName, TaxID, City, CountryCode, AddressLine1, Email]
     );
 
     const newId = result.insertId;
@@ -109,6 +113,7 @@ router.post("/", async (req, res) => {
         CompanyName,
         LegalName,
         TaxID,
+        AddressLine1,
         City,
         CountryCode,
         Email,
@@ -138,7 +143,7 @@ router.put("/:id", async (req, res) => {
 
   const { CompanyName, LegalName, TaxID, City, CountryCode, Email, IsActive } =
     req.body;
-
+  const { AddressLine1 } = req.body;
   try {
     const [result] = await pool.query(
       `UPDATE Companies
@@ -148,6 +153,7 @@ router.put("/:id", async (req, res) => {
          TaxID = ?,
          City = ?,
          CountryCode = ?,
+         AddressLine1 = ?,
          Email = ?,
          IsActive = ?
        WHERE CompanyID = ?`,
@@ -157,6 +163,7 @@ router.put("/:id", async (req, res) => {
         TaxID,
         City,
         CountryCode,
+        AddressLine1,
         Email,
         IsActive ?? 1,
         id,
@@ -173,6 +180,7 @@ router.put("/:id", async (req, res) => {
         CompanyName,
         LegalName,
         TaxID,
+        AddressLine1,
         City,
         CountryCode,
         Email,

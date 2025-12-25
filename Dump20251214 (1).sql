@@ -2312,3 +2312,46 @@ CREATE TABLE IF NOT EXISTS ProductLotInventory (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
+-- NEW TABLE: DirectPurchases
+CREATE TABLE IF NOT EXISTS DirectPurchases (
+  DirectPurchaseID BIGINT AUTO_INCREMENT PRIMARY KEY,
+  CompanyID BIGINT NOT NULL,
+  SupplierID BIGINT NOT NULL,
+  PurchaseDate DATETIME DEFAULT CURRENT_TIMESTAMP,
+  ReceiptNumber VARCHAR(50) NOT NULL,  -- Supplier's invoice/guia number
+  TotalAmount DECIMAL(18,4) NOT NULL,
+  TaxAmount DECIMAL(18,4) DEFAULT 0,
+  Status VARCHAR(50) DEFAULT 'Pending',  -- Pending, PartiallyReceived, Received, Cancelled
+  Notes VARCHAR(1000),
+  CreatedByEmployeeID BIGINT NULL,
+  CONSTRAINT FK_DP_Company FOREIGN KEY (CompanyID) REFERENCES Companies(CompanyID) ON DELETE CASCADE,
+  CONSTRAINT FK_DP_Supplier FOREIGN KEY (SupplierID) REFERENCES Suppliers(SupplierID),
+  CONSTRAINT FK_DP_Employee FOREIGN KEY (CreatedByEmployeeID) REFERENCES Employees(EmployeeID),
+  CONSTRAINT UQ_DP_Number UNIQUE (CompanyID, ReceiptNumber)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- NEW TABLE: DirectPurchaseItems
+CREATE TABLE IF NOT EXISTS DirectPurchaseItems (
+  DirectPurchaseItemID BIGINT AUTO_INCREMENT PRIMARY KEY,
+  DirectPurchaseID BIGINT NOT NULL,
+  ProductID BIGINT NOT NULL,
+  Description VARCHAR(500),
+  Quantity DECIMAL(18,4) NOT NULL,
+  UnitPrice DECIMAL(18,4) NOT NULL,
+  TaxAmount DECIMAL(18,4) DEFAULT 0,
+  ReceivedQuantity DECIMAL(18,4) DEFAULT 0,
+  CONSTRAINT FK_DPI_DP FOREIGN KEY (DirectPurchaseID) REFERENCES DirectPurchases(DirectPurchaseID) ON DELETE CASCADE,
+  CONSTRAINT FK_DPI_Product FOREIGN KEY (ProductID) REFERENCES Products(ProductID)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- UPDATE: GoodsReceipts to support DirectPurchase
+ALTER TABLE GoodsReceipts ADD COLUMN DirectPurchaseID BIGINT NULL AFTER PurchaseOrderID;
+ALTER TABLE GoodsReceipts ADD CONSTRAINT FK_GR_DP FOREIGN KEY (DirectPurchaseID) REFERENCES DirectPurchases(DirectPurchaseID);
+
+-- UPDATE: GoodsReceiptItems to support DirectPurchaseItems
+ALTER TABLE GoodsReceiptItems ADD COLUMN DirectPurchaseItemID BIGINT NULL AFTER PurchaseOrderItemID;
+ALTER TABLE GoodsReceiptItems ADD CONSTRAINT FK_GRI_DPI FOREIGN KEY (DirectPurchaseItemID) REFERENCES DirectPurchaseItems(DirectPurchaseItemID);
+
+-- UPDATE: SupplierInvoices to support DirectPurchase
+ALTER TABLE SupplierInvoices ADD COLUMN DirectPurchaseID BIGINT NULL AFTER GoodsReceiptID;
+ALTER TABLE SupplierInvoices ADD CONSTRAINT FK_SI_DP FOREIGN KEY (DirectPurchaseID) REFERENCES DirectPurchases(DirectPurchaseID);

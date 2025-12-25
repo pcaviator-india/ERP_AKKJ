@@ -125,19 +125,33 @@ const buildScopeKey = (companyId, userId) => {
   return `${companyKey}:${userKey}`;
 };
 
+// Merge company-level config first, then user-level overrides
+const mergeScopedConfig = (companyConfig, userConfig) =>
+  deepMerge(
+    { receipts: defaultReceipts, accessories: defaultAccessories },
+    deepMerge(companyConfig, userConfig)
+  );
+
 async function getConfig(companyId, userId) {
   const store = await readStore();
-  const scopeKey = buildScopeKey(companyId, userId);
-  const current = store.items[scopeKey] || {};
-  // ensure receipts and accessories defaults are present
-  const merged = deepMerge(
-    { receipts: defaultReceipts, accessories: defaultAccessories },
-    current
-  );
-  // if we merged in defaults, write back so future reads are hydrated
-  if (merged !== current) {
-    store.items[scopeKey] = merged;
-    await writeStore(store);
+  const companyKey = buildScopeKey(companyId, null);
+  const userKey = buildScopeKey(companyId, userId);
+  const companyConfig = store.items[companyKey] || {};
+  const userConfig = store.items[userKey] || {};
+  const merged = mergeScopedConfig(companyConfig, userConfig);
+  // persist defaults back so subsequent reads are hydrated for both scopes
+  const nextStore = { ...store };
+  let changed = false;
+  if (JSON.stringify(companyConfig) !== JSON.stringify(nextStore.items[companyKey])) {
+    nextStore.items[companyKey] = companyConfig;
+    changed = true;
+  }
+  if (JSON.stringify(userConfig) !== JSON.stringify(nextStore.items[userKey])) {
+    nextStore.items[userKey] = userConfig;
+    changed = true;
+  }
+  if (changed) {
+    await writeStore(nextStore);
   }
   return merged;
 }
@@ -158,14 +172,28 @@ async function updateConfig(companyId, userId, updates) {
     );
   }
   const store = await readStore();
-  const scopeKey = buildScopeKey(companyId, userId);
-  const current = store.items[scopeKey] || {};
-  const next = deepMerge(current, withDefaults);
-  store.items[scopeKey] = next;
+  const companyKey = buildScopeKey(companyId, null);
+  const userKey = buildScopeKey(companyId, userId);
+
+  const currentCompany = store.items[companyKey] || {};
+  const currentUser = store.items[userKey] || {};
+
+  // Always write user-scoped preferences
+  const nextUser = deepMerge(currentUser, withDefaults);
+  store.items[userKey] = nextUser;
+
+  // Persist tax defaults at the company scope so they stick across logins/users
+  if (withDefaults.tax) {
+    const nextCompany = deepMerge(currentCompany, { tax: withDefaults.tax });
+    store.items[companyKey] = nextCompany;
+  }
+
   store.version = (store.version || 1) + 1;
   store.updatedAt = new Date().toISOString();
   await writeStore(store);
-  return next;
+
+  // Return merged view (company + user) with defaults
+  return mergeScopedConfig(store.items[companyKey] || {}, store.items[userKey] || {});
 }
 
 module.exports = {

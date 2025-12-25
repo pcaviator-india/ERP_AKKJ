@@ -340,6 +340,17 @@ export default function Pos() {
   const [lotOptionsByLine, setLotOptionsByLine] = useState({});
   const [lotModalLoading, setLotModalLoading] = useState(false);
   const [lotModalError, setLotModalError] = useState("");
+  const [lotSearch, setLotSearch] = useState("");
+  const [lotHighlight, setLotHighlight] = useState(0);
+  const [serialModal, setSerialModal] = useState({
+    open: false,
+    lineId: null,
+  });
+  const [serialOptions, setSerialOptions] = useState([]);
+  const [serialModalLoading, setSerialModalLoading] = useState(false);
+  const [serialModalError, setSerialModalError] = useState("");
+  const [serialSearch, setSerialSearch] = useState("");
+  const [serialHighlight, setSerialHighlight] = useState(0);
   const [promotions, setPromotions] = useState([]);
   const [promotionsLoading, setPromotionsLoading] = useState(false);
   const screenChannel = useMemo(
@@ -1299,6 +1310,18 @@ export default function Pos() {
     }
   };
 
+  const fetchSerialsForProduct = async (productId) => {
+    if (!productId) return [];
+    try {
+      const { data } = await api.get("/api/product-serials", {
+        params: { productId, status: "InStock" },
+      });
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      return [];
+    }
+  };
+
   const applyLotToLine = (lineId, lot) => {
     setCart((prev) =>
       prev.map((item) =>
@@ -1312,6 +1335,31 @@ export default function Pos() {
           : item
       )
     );
+  };
+
+  const applySerialToLine = (lineId, serial) => {
+    setCart((prev) =>
+      prev.map((item) =>
+        item.LineID === lineId
+          ? {
+              ...item,
+              ProductSerialID: serial?.ProductSerialID || null,
+              SerialNumber: serial?.SerialNumber || null,
+            }
+          : item
+      )
+    );
+  };
+
+  const removeLineById = (lineId) => {
+    setCart((prev) => {
+      const target = prev.find((item) => getLineId(item) === lineId);
+      if (!target) return prev;
+      if (target.PackGroupId) {
+        return prev.filter((item) => item.PackGroupId !== target.PackGroupId);
+      }
+      return prev.filter((item) => getLineId(item) !== lineId);
+    });
   };
 
   const isProductAvailable = (productId) => {
@@ -1422,6 +1470,7 @@ export default function Pos() {
     const qty = normalizeQty(Number(quantity || 1));
     const tax = computeTaxForProduct(product);
     const usesLots = options.usesLots ?? Number(product?.UsesLots || 0);
+    const usesSerials = options.usesSerials ?? Number(product?.UsesSerials || 0);
     const price =
       options.unitPriceOverride !== undefined && options.unitPriceOverride !== null
         ? Number(options.unitPriceOverride)
@@ -1442,6 +1491,9 @@ export default function Pos() {
       ProductLotID: options.lotId || null,
       LotNumber: options.lotNumber || null,
       LotExpirationDate: options.lotExpiration || null,
+      UsesSerials: usesSerials ? 1 : 0,
+      ProductSerialID: options.serialId || null,
+      SerialNumber: options.serialNumber || null,
       IsPack: options.isPack || false,
       IsPackComponent: options.isPackComponent || false,
       PackGroupId: options.packGroupId || null,
@@ -1458,28 +1510,32 @@ export default function Pos() {
         type: "error",
         message: "Unable to add product (missing ID).",
       });
-      return false;
+      return null;
     }
     if (!isProductAvailable(productId)) {
       setStatus({
         type: "error",
         message: "Product not available in this warehouse.",
       });
-      return false;
+      return null;
     }
     const qty = normalizeQty(Number(quantity || 1));
     const usesLots = options.usesLots ?? Number(product?.UsesLots || 0);
+    const usesSerials = options.usesSerials ?? Number(product?.UsesSerials || 0);
     const lotId = options.lotId || null;
+    const serialNumber = options.serialNumber || null;
+    let createdLine = null;
     setCart((prev) => {
       const existing = prev.find(
         (item) =>
           item.ProductID === productId &&
           !item.PackGroupId &&
-          (!usesLots || item.ProductLotID === lotId)
+          (!usesLots || item.ProductLotID === lotId) &&
+          (!usesSerials || item.SerialNumber === serialNumber)
       );
       if (existing) {
         const nextQty = normalizeQty(existing.Quantity + qty);
-        return prev.map((item) =>
+        const updated = prev.map((item) =>
           item.LineID === existing.LineID
             ? {
                 ...item,
@@ -1488,11 +1544,21 @@ export default function Pos() {
               }
             : item
         );
+        createdLine = { ...existing, Quantity: nextQty };
+        return updated;
       }
-        return [...prev, buildCartItem(product, qty, { ...options, usesLots, lotId })];
+      const newLine = buildCartItem(product, qty, {
+        ...options,
+        usesLots,
+        lotId,
+        usesSerials,
+        serialNumber,
       });
-      return true;
-    };
+      createdLine = newLine;
+      return [...prev, newLine];
+    });
+    return createdLine;
+  };
 
   const addPackToCart = async (product, components) => {
     const productId = getProductId(product);
@@ -1589,6 +1655,7 @@ export default function Pos() {
         packGroupId,
         isPack: true,
         usesLots: Number(product?.UsesLots || 0) === 1,
+        usesSerials: Number(product?.UsesSerials || 0) === 1,
         lotId: packLot?.ProductLotID || null,
         lotNumber: packLot?.LotNumber || null,
         lotExpiration: packLot?.ExpirationDate || null,
@@ -1610,6 +1677,7 @@ export default function Pos() {
           if (qty <= 0) return null;
           const componentLot = componentLotMap.get(Number(row.ComponentProductID));
           const usesLots = Number(componentProduct?.UsesLots || 0) === 1;
+          const usesSerials = Number(componentProduct?.UsesSerials || 0) === 1;
           return buildCartItem(componentProduct, qty, {
             packGroupId,
             packParentId: productId,
@@ -1621,6 +1689,7 @@ export default function Pos() {
             taxRateId: null,
             taxRatePerc: 0,
             usesLots,
+            usesSerials,
             lotId: componentLot?.ProductLotID || null,
             lotNumber: componentLot?.LotNumber || null,
             lotExpiration: componentLot?.ExpirationDate || null,
@@ -1652,7 +1721,9 @@ export default function Pos() {
     if (components.length) {
       await addPackToCart(product, components);
     } else {
-      if (Number(product?.UsesLots || 0) === 1) {
+      const usesLots = Number(product?.UsesLots || 0) === 1;
+      const usesSerials = Number(product?.UsesSerials || 0) === 1;
+      if (usesLots || usesSerials) {
         if (!getEffectiveWarehouseId()) {
           setStatus({
             type: "error",
@@ -1660,26 +1731,19 @@ export default function Pos() {
           });
           return;
         }
-        const lot = await fetchFefoLot(productId);
-        if (!lot) {
-          setStatus({
-            type: "error",
-            message: "No available lot for this product.",
-          });
-          return;
+        const addedLine = addLineItem(product, 1, {
+          usesLots,
+          usesSerials,
+        });
+        if (!addedLine) return;
+        if (usesLots) {
+          await openLotModalForItem({ ...addedLine, UsesLots: 1 });
+        } else if (usesSerials) {
+          await openSerialModalForLine({ ...addedLine, UsesSerials: 1 });
         }
-        if (
-          !addLineItem(product, 1, {
-            usesLots: true,
-            lotId: lot.ProductLotID,
-            lotNumber: lot.LotNumber,
-            lotExpiration: lot.ExpirationDate,
-          })
-        ) {
-          return;
-        }
-      } else if (!addLineItem(product, 1)) {
-        return;
+      } else {
+        const added = addLineItem(product, 1);
+        if (!added) return;
       }
     }
     setSearchTerm("");
@@ -1691,6 +1755,13 @@ export default function Pos() {
     setCart((prev) => {
       const target = prev.find((item) => getLineId(item) === lineId);
       if (!target || target.IsPackComponent) return prev;
+      if (target.UsesSerials && delta > 0) {
+        setStatus({
+          type: "error",
+          message: "Add another serial by adding the item again.",
+        });
+        return prev;
+      }
       const nextQty = normalizeQty((target.Quantity || 0) + delta);
       if (nextQty <= 0 && target.PackGroupId) {
         return prev.filter((item) => item.PackGroupId !== target.PackGroupId);
@@ -1730,6 +1801,13 @@ export default function Pos() {
     setCart((prev) => {
       const target = prev.find((item) => getLineId(item) === lineId);
       if (!target || target.IsPackComponent) return prev;
+      if (target.UsesSerials && qty > 1) {
+        setStatus({
+          type: "error",
+          message: "Serial-tracked items must be 1 per line.",
+        });
+        return prev;
+      }
       if (qty <= 0 && target.PackGroupId) {
         return prev.filter((item) => item.PackGroupId !== target.PackGroupId);
       }
@@ -1815,6 +1893,8 @@ export default function Pos() {
       const options = await fetchLotsForProduct(item.ProductID);
       setLotOptions(options);
       setLotOptionsByLine({});
+      setLotSearch("");
+      setLotHighlight(0);
       setLotModal({
         open: true,
         mode: "single",
@@ -1827,6 +1907,38 @@ export default function Pos() {
     } finally {
       setLotModalLoading(false);
     }
+  };
+
+  const openSerialModalForLine = async (line) => {
+    setSerialModalError("");
+    setSerialModalLoading(true);
+    try {
+      const options = await fetchSerialsForProduct(line.ProductID);
+      setSerialOptions(options);
+      setSerialSearch("");
+      setSerialHighlight(0);
+      setSerialModal({ open: true, lineId: line.LineID });
+      if (options.length === 0) {
+        setSerialModalError("No serials found for this product.");
+        removeLineById(line.LineID);
+        setSerialModal({ open: false, lineId: null });
+        setStatus({
+          type: "error",
+          message: "No serials available for this product.",
+        });
+      }
+    } catch (err) {
+      console.error("Failed to load serials", err);
+      setSerialModalError("Failed to load serials.");
+    } finally {
+      setSerialModalLoading(false);
+    }
+  };
+
+  const closeSerialModal = () => {
+    setSerialModal({ open: false, lineId: null });
+    setSerialOptions([]);
+    setSerialModalError("");
   };
 
   const closeLotModal = () => {
@@ -2986,6 +3098,7 @@ export default function Pos() {
     if (prev.pin && !pinModal) focusSearchSoon();
     if (prev.payment && !paymentModal) focusSearchSoon();
     if (prev.lot && !lotModal.open) focusSearchSoon();
+    if (prev.serial && !serialModal.open) focusSearchSoon();
     prevModalsRef.current = {
       customer: customerModal,
       employee: employeeModal,
@@ -2993,8 +3106,22 @@ export default function Pos() {
       pin: pinModal,
       payment: paymentModal,
       lot: lotModal.open,
+      serial: serialModal.open,
     };
-  }, [customerModal, employeeModal, ticketModal, pinModal, paymentModal, lotModal.open]);
+  }, [customerModal, employeeModal, ticketModal, pinModal, paymentModal, lotModal.open, serialModal.open]);
+
+  useEffect(() => {
+    if (lotModal.open || serialModal.open) return;
+    const pendingLot = cart.find((line) => line.UsesLots && !line.ProductLotID);
+    if (pendingLot) {
+      openLotModalForItem(pendingLot);
+      return;
+    }
+    const pendingSerial = cart.find((line) => line.UsesSerials && !line.SerialNumber);
+    if (pendingSerial) {
+      openSerialModalForLine(pendingSerial);
+    }
+  }, [cart, lotModal.open, serialModal.open]);
 
   useEffect(() => {
     focusSearchSoon();
@@ -3213,6 +3340,11 @@ export default function Pos() {
                         : ""}
                     </p>
                   ) : null}
+                  {item.UsesSerials ? (
+                    <p className="muted small">
+                      Serial: {item.SerialNumber || "Select serial"}
+                    </p>
+                  ) : null}
                 </div>
               <div className="qty-controls">
                 {item.IsPackComponent ? (
@@ -3345,9 +3477,9 @@ export default function Pos() {
                 {!item.IsPackComponent && (
                   <div
                     className="actions"
-                    style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}
+                    style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}
                   >
-                    {(item.IsPack
+                    {!!(item.IsPack
                       ? cart.some(
                           (line) =>
                             line.PackGroupId === item.PackGroupId && line.UsesLots
@@ -3358,8 +3490,23 @@ export default function Pos() {
                         type="button"
                         onClick={() => openLotModalForItem(item)}
                         title="Change lot"
+                        aria-label="Change lot"
                       >
-                        Lots
+                        <svg
+                          viewBox="0 0 24 24"
+                          width="16"
+                          height="16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <rect x="3" y="3" width="7" height="7" rx="1" />
+                          <rect x="14" y="3" width="7" height="7" rx="1" />
+                          <rect x="3" y="14" width="7" height="7" rx="1" />
+                          <rect x="14" y="14" width="7" height="7" rx="1" />
+                        </svg>
                       </button>
                     )}
                     <button
@@ -3367,12 +3514,51 @@ export default function Pos() {
                       type="button"
                       onClick={() => openOverrideModal(item, idx)}
                       title="Override price"
+                      aria-label="Override price"
                     >
-                      Override
+                      <svg
+                        viewBox="0 0 24 24"
+                        width="16"
+                        height="16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" />
+                        <path d="M14.06 4.94l3.75 3.75" />
+                      </svg>
                     </button>
-                  <button
-                    className="delete-item desktop-delete"
-                    onClick={() => removeItem(lineId)}
+                    {!!item.UsesSerials && (
+                      <button
+                        className="btn ghost small"
+                        type="button"
+                        onClick={() => openSerialModalForLine(item)}
+                        title="Change serial"
+                        aria-label="Change serial"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          width="16"
+                          height="16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <circle cx="8" cy="8" r="3" />
+                          <circle cx="16" cy="16" r="3" />
+                          <path d="M11 11l2 2" />
+                          <path d="M12 8h8" />
+                          <path d="M4 16h8" />
+                        </svg>
+                      </button>
+                    )}
+                    <button
+                      className="delete-item desktop-delete"
+                      onClick={() => removeItem(lineId)}
                     aria-label="Remove item"
                   >
                     <svg
@@ -3650,27 +3836,75 @@ export default function Pos() {
                 </div>
                 <label>
                   Lot
-                  <select
-                    value={lotModalLine.ProductLotID || ""}
+                  <input
+                    value={lotSearch}
                     onChange={(e) => {
-                      const selected = lotOptions.find(
-                        (lot) => String(lot.ProductLotID) === e.target.value
-                      );
-                      applyLotToLine(lotModalLine.LineID, selected || null);
+                      setLotSearch(e.target.value);
+                      setLotHighlight(0);
                     }}
-                  >
-                    <option value="">Select lot</option>
-                    {lotOptions.map((lot) => (
-                      <option key={lot.ProductLotID} value={lot.ProductLotID}>
-                        {lot.LotNumber} (qty {Number(lot.Quantity || 0)}
-                        {lot.ExpirationDate
-                          ? `, exp ${formatShortDate(lot.ExpirationDate)}`
-                          : ""}
-                        )
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="Search lot number"
+                    onKeyDown={(e) => {
+                      const filtered = lotOptions.filter((lot) =>
+                        (lot.LotNumber || "").toLowerCase().includes(lotSearch.toLowerCase())
+                      );
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setLotHighlight((prev) =>
+                          filtered.length === 0 ? 0 : (prev + 1) % filtered.length
+                        );
+                      } else if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setLotHighlight((prev) =>
+                          filtered.length === 0
+                            ? 0
+                            : prev <= 0
+                              ? filtered.length - 1
+                              : prev - 1
+                        );
+                      } else if (e.key === "Enter") {
+                        e.preventDefault();
+                        const pick = filtered[lotHighlight];
+                        if (pick) {
+                          applyLotToLine(lotModalLine.LineID, pick);
+                          closeLotModal();
+                        }
+                      }
+                    }}
+                  />
                 </label>
+                <ul className="list" style={{ maxHeight: 240, overflowY: "auto" }}>
+                  {lotOptions
+                    .filter((lot) =>
+                      (lot.LotNumber || "").toLowerCase().includes(lotSearch.toLowerCase())
+                    )
+                    .map((lot, idx) => (
+                      <li
+                        key={lot.ProductLotID}
+                        className="list-row"
+                        style={{
+                          cursor: "pointer",
+                          background: idx === lotHighlight ? "#eef2ff" : "transparent",
+                        }}
+                        onClick={() => {
+                          applyLotToLine(lotModalLine.LineID, lot);
+                          closeLotModal();
+                        }}
+                      >
+                        <div className="stack">
+                          <span className="entity-name">{lot.LotNumber}</span>
+                          <span className="muted small">
+                            Qty {Number(lot.Quantity || 0)}
+                            {lot.ExpirationDate
+                              ? ` · Exp ${formatShortDate(lot.ExpirationDate)}`
+                              : ""}
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                  {lotOptions.filter((lot) =>
+                    (lot.LotNumber || "").toLowerCase().includes(lotSearch.toLowerCase())
+                  ).length === 0 && <li className="muted small list-row">No lots</li>}
+                </ul>
               </>
             )}
             {lotModal.mode === "pack" && (
@@ -3718,6 +3952,89 @@ export default function Pos() {
               </>
             )}
             <button className="btn ghost" onClick={closeLotModal}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+      {serialModal.open && (
+        <div className="modal">
+          <div className="modal-content">
+            <h3>Select serial</h3>
+            {serialModalError && <p className="status error">{serialModalError}</p>}
+            {serialModalLoading ? (
+              <p className="muted">Loading serials...</p>
+            ) : (
+              <>
+                <label>
+                  Serial
+                  <input
+                    value={serialSearch}
+                    onChange={(e) => {
+                      setSerialSearch(e.target.value);
+                      setSerialHighlight(0);
+                    }}
+                    placeholder="Search serial"
+                    onKeyDown={(e) => {
+                      const filtered = serialOptions.filter((s) =>
+                        (s.SerialNumber || "").toLowerCase().includes(serialSearch.toLowerCase())
+                      );
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setSerialHighlight((prev) =>
+                          filtered.length === 0 ? 0 : (prev + 1) % filtered.length
+                        );
+                      } else if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setSerialHighlight((prev) =>
+                          filtered.length === 0
+                            ? 0
+                            : prev <= 0
+                              ? filtered.length - 1
+                              : prev - 1
+                        );
+                      } else if (e.key === "Enter") {
+                        e.preventDefault();
+                        const pick = filtered[serialHighlight];
+                        if (pick) {
+                          applySerialToLine(serialModal.lineId, pick);
+                          closeSerialModal();
+                        }
+                      }
+                    }}
+                  />
+                </label>
+                <ul className="list" style={{ maxHeight: 240, overflowY: "auto" }}>
+                  {serialOptions
+                    .filter((s) =>
+                      (s.SerialNumber || "").toLowerCase().includes(serialSearch.toLowerCase())
+                    )
+                    .map((s, idx) => (
+                      <li
+                        key={s.ProductSerialID}
+                        className="list-row"
+                        style={{
+                          cursor: "pointer",
+                          background: idx === serialHighlight ? "#eef2ff" : "transparent",
+                        }}
+                        onClick={() => {
+                          applySerialToLine(serialModal.lineId, s);
+                          closeSerialModal();
+                        }}
+                      >
+                        <div className="stack">
+                          <span className="entity-name">{s.SerialNumber}</span>
+                          <span className="muted small">{s.Status}</span>
+                        </div>
+                      </li>
+                    ))}
+                  {serialOptions.filter((s) =>
+                    (s.SerialNumber || "").toLowerCase().includes(serialSearch.toLowerCase())
+                  ).length === 0 && <li className="muted small list-row">No serials</li>}
+                </ul>
+              </>
+            )}
+            <button className="btn ghost" onClick={closeSerialModal}>
               Close
             </button>
           </div>
@@ -4253,3 +4570,4 @@ export default function Pos() {
     </div>
   );
 }
+

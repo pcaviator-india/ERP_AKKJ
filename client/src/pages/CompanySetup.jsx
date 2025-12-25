@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import api from "../api/http";
 import { useAuth } from "../context/AuthContext";
 import { useConfig } from "../context/ConfigContext";
@@ -7,6 +7,7 @@ import { useConfig } from "../context/ConfigContext";
 export default function CompanySetup() {
   const navigate = useNavigate();
   const { company } = useAuth();
+  const location = useLocation();
   const { config, updateConfig, ready: configReady } = useConfig();
   const [taxRates, setTaxRates] = useState([]);
   const [form, setForm] = useState({
@@ -93,7 +94,12 @@ export default function CompanySetup() {
         },
       });
       setStatus({ type: "success", message: "Company information saved." });
-      setTimeout(() => navigate("/employees/onboarding"), 900);
+      // Only redirect to employee onboarding when explicitly requested via ?next=employees
+      const params = new URLSearchParams(location.search);
+      const next = params.get("next");
+      if (next === "employees" || next === "onboarding") {
+        setTimeout(() => navigate("/employees/onboarding"), 900);
+      }
     } catch (error) {
       const message =
         error.response?.data?.error || error.message || "Failed to save company";

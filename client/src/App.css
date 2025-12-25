@@ -727,7 +727,7 @@ select:focus {
 
 .order-row {
   display: grid;
-  grid-template-columns: 2fr 0.9fr 0.9fr 1.6fr 0.7fr 1fr 40px;
+  grid-template-columns: 2fr 0.9fr 0.9fr 1.1fr 0.7fr 1fr 40px;
   align-items: center;
   gap: 0.25rem;
   padding: 0.08rem 0.12rem;
@@ -2643,7 +2643,7 @@ select:focus {
 }
 
 .pos-footer-row.totals-row {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
 }
 
@@ -2666,6 +2666,20 @@ select:focus {
 }
 .charge-area .btn-label {
   display: inline;
+}
+
+.pos-footer-row.totals-row .order-total {
+  justify-self: end;
+}
+
+.pos-footer-row.totals-row .promotions-summary {
+  grid-column: 1 / -1;
+  order: 5;
+}
+
+.pos-footer-row.totals-row .charge-area {
+  grid-column: 1 / -1;
+  justify-content: flex-end;
 }
 
 /* Mobile-first overrides for charge buttons */

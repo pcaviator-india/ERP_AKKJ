@@ -20,11 +20,15 @@
     companyInfo: "Informaci\u00f3n de la Empresa",
     inviteEmployee: "Invitar Empleado",
     launchPos: "Abrir POS",
+    suppliers: "Proveedores",
+    purchaseOrders: "\u00d3rdenes de compra",
+    directPurchases: "Compras Directas",
     roles: "Roles",
     promotions: "Promociones",
     settings: "Configuraci\u00f3n",
     receipts: "Recibos",
     accessories: "Accesorios",
+    purchaseOrders: "Órdenes de compra",
   },
   promotions: {
     create: {
@@ -32,12 +36,14 @@
       subtitle: "Define tipo de descuento, elegibilidad, calendario y límites.",
       save: "Guardar promoción",
       validationRequired: "El nombre es obligatorio.",
-      savedLocal: "Promoción guardada localmente. Conecta la API para persistir.",
+      savedLocal:
+        "Promoción guardada localmente. Conecta la API para persistir.",
       name: "Nombre",
       namePlaceholder: "Oferta navideña",
       code: "Código",
       description: "Descripción",
-      descriptionPlaceholder: "Visible para el equipo; agrega reglas y contexto.",
+      descriptionPlaceholder:
+        "Visible para el equipo; agrega reglas y contexto.",
       type: "Tipo",
       value: "Valor",
       enableOnSave: "Habilitar al guardar",
@@ -83,7 +89,8 @@
   },
   warehouseAdd: {
     title: "Agregar productos a bodega",
-    description: "Elige una bodega, busca el producto y define stock inicial y umbrales.",
+    description:
+      "Elige una bodega, busca el producto y define stock inicial y umbrales.",
     warehouse: "Bodega",
     productSearch: "Buscar producto",
     productPlaceholder: "Escribe 2+ caracteres...",
@@ -100,9 +107,10 @@
     loadError: "No se pudieron cargar las bodegas.",
     selectedLabel: "Seleccionado",
   },
-    priceLists: {
+  priceLists: {
     title: "Listas de precios",
-    subtitle: "Crea listas y agrega tramos: establece cantidad mínima y precio por producto.",
+    subtitle:
+      "Crea listas y agrega tramos: establece cantidad mínima y precio por producto.",
     newList: "Nombre de nueva lista",
     create: "Crear",
     created: "Lista creada",
@@ -132,7 +140,8 @@
     description: "Busca, filtra y gestiona tus productos.",
     import: "Importar",
     export: "exportar",
-    importDescription: "Primero sube las im?genes (opcional), luego sube CSV/XLSX, mapea columnas, revisa y importa.",
+    importDescription:
+      "Primero sube las im?genes (opcional), luego sube CSV/XLSX, mapea columnas, revisa y importa.",
     importStepsTitle: "Pasos de importaci?n",
     importImages: "Im?genes",
     importUploadImages: "Subir im?genes",
@@ -163,7 +172,8 @@
     importParseError: "No se pudo procesar el archivo.",
     importNoData: "Sin datos para previsualizar.",
 
-    importDescription: "Primero sube las imágenes (opcional), luego sube CSV/XLSX, mapea columnas, revisa y importa.",
+    importDescription:
+      "Primero sube las imágenes (opcional), luego sube CSV/XLSX, mapea columnas, revisa y importa.",
     importStepsTitle: "Pasos de importación",
     add: "Agregar Producto",
     search: "Buscar productos...",
@@ -206,7 +216,8 @@
   },
   productForm: {
     title: "Agregar Producto",
-    description: "Captura los datos clave del producto para vender y gestionar inventario.",
+    description:
+      "Captura los datos clave del producto para vender y gestionar inventario.",
     sku: "SKU",
     name: "Nombre del producto",
     barcode: "C\u00f3digo de barras",
@@ -232,7 +243,8 @@
     uploadImage: "Subir imagen",
     images: "Im\u00e1genes",
     primary: "Principal",
-    primaryHint: "La primera imagen ser\u00e1 principal; arrastra para reordenar.",
+    primaryHint:
+      "La primera imagen ser\u00e1 principal; arrastra para reordenar.",
     select: "Seleccionar",
     save: "Guardar producto",
     saving: "Guardando...",
@@ -283,7 +295,8 @@
   },
   inventory: {
     title: "Inventario",
-    description: "Ajusta existencias con umbrales de stock m\u00ednimo y m\u00e1ximo.",
+    description:
+      "Ajusta existencias con umbrales de stock m\u00ednimo y m\u00e1ximo.",
     search: "Buscar productos...",
     allCategories: "Todas las categor\u00edas",
     filterAll: "Todos los productos",
@@ -301,7 +314,8 @@
     unlimitedShort: "Ilimitado",
     import: "Importar",
     export: "exportar",
-    importDescription: "Primero sube las im?genes (opcional), luego sube CSV/XLSX, mapea columnas, revisa y importa.",
+    importDescription:
+      "Primero sube las im?genes (opcional), luego sube CSV/XLSX, mapea columnas, revisa y importa.",
     importStepsTitle: "Pasos de importaci?n",
     importImages: "Im?genes",
     importUploadImages: "Subir im?genes",
@@ -337,7 +351,8 @@
     saveSuccess: "Inventario guardado.",
     saveError: "No se pudo guardar el inventario.",
     noChanges: "No hay cambios para guardar.",
-    saveHint: "Ajusta los valores y presiona Guardar para actualizar stock y umbrales.",
+    saveHint:
+      "Ajusta los valores y presiona Guardar para actualizar stock y umbrales.",
     loading: "Cargando inventario...",
     empty: "No se encontraron items de inventario.",
     loadError: "No se pudo cargar el inventario.",
@@ -371,12 +386,14 @@
     updated: "Campo actualizado.",
     labelRequired: "La etiqueta es obligatoria.",
     labelExists: "La etiqueta ya existe.",
-    selectPrompt: "Selecciona qué campos personalizados asociar a este producto.",
+    selectPrompt:
+      "Selecciona qué campos personalizados asociar a este producto.",
     saveAll: "Guardar",
     saved: "Campos personalizados guardados.",
     saveError: "No se pudieron guardar los campos personalizados.",
     loadError: "No se pudieron cargar los campos personalizados.",
-    pendingSaved: "Valores personalizados en espera. Guarda el producto para adjuntarlos.",
+    pendingSaved:
+      "Valores personalizados en espera. Guarda el producto para adjuntarlos.",
   },
   pos: {
     cashier: "Cajero",
@@ -387,7 +404,8 @@
     changeEmployee: "Cambiar empleado",
     parkTicket: "Guardar ticket",
     loadTicket: "Cargar ticket",
-    searchPlaceholder: "Escanea código / SKU / nombre (usa TKT-xxxx para cargar ticket)",
+    searchPlaceholder:
+      "Escanea código / SKU / nombre (usa TKT-xxxx para cargar ticket)",
     emptyState: "Sin ítems. Escanea o busca para agregar productos.",
     product: "Producto",
     qty: "Cant.",
@@ -409,13 +427,3 @@
     charge: "Cobrar",
   },
 };
-
-
-
-
-
-
-
-
-
-

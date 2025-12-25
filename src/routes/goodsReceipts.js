@@ -105,6 +105,7 @@ router.post("/", async (req, res) => {
   // 👇 make it super explicit & forgiving on casing
   const SupplierID = body.SupplierID ?? body.supplierId ?? body.SupplierId;
   const PurchaseOrderID = body.PurchaseOrderID ?? body.purchaseOrderId;
+  const DirectPurchaseID = body.DirectPurchaseID ?? body.directPurchaseId;
   const ReceiptDate = body.ReceiptDate ?? body.receiptDate;
   const ReceiptNumber = body.ReceiptNumber ?? body.receiptNumber;
   const SupplierGuiaDespachoNumber =
@@ -156,13 +157,14 @@ router.post("/", async (req, res) => {
     // 1) Insert GoodsReceipts header
     const [grResult] = await conn.query(
       `INSERT INTO GoodsReceipts
-        (CompanyID, PurchaseOrderID, SupplierID,
+        (CompanyID, PurchaseOrderID, DirectPurchaseID, SupplierID,
          ReceiptDate, ReceiptNumber, SupplierGuiaDespachoNumber,
          Notes, ReceivedByEmployeeID)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         companyId,
         PurchaseOrderID || null,
+        DirectPurchaseID || null,
         SupplierID,
         ReceiptDate || new Date(),
         ReceiptNumber,
@@ -193,12 +195,13 @@ router.post("/", async (req, res) => {
       // 2a) Insert GoodsReceiptItem
       const [griResult] = await conn.query(
         `INSERT INTO GoodsReceiptItems
-          (GoodsReceiptID, PurchaseOrderItemID, ProductID,
+          (GoodsReceiptID, PurchaseOrderItemID, DirectPurchaseItemID, ProductID,
            QuantityReceived, UnitPrice, ProductLotID, ProductSerialID, Notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           goodsReceiptId,
           PurchaseOrderItemID,
+          item.DirectPurchaseItemID || null,
           ProductID,
           QuantityReceived,
           UnitPrice,
@@ -293,6 +296,16 @@ router.post("/", async (req, res) => {
           [QuantityReceived, PurchaseOrderItemID]
         );
       }
+
+      // 2d) Update DirectPurchaseItems.ReceivedQuantity (if linked)
+      if (item.DirectPurchaseItemID) {
+        await conn.query(
+          `UPDATE DirectPurchaseItems
+           SET ReceivedQuantity = ReceivedQuantity + ?
+           WHERE DirectPurchaseItemID = ?`,
+          [QuantityReceived, item.DirectPurchaseItemID]
+        );
+      }
     }
 
     // 3) If linked to a PurchaseOrder, update its Status based on received qty
@@ -326,6 +339,41 @@ router.post("/", async (req, res) => {
            SET Status = ?
            WHERE PurchaseOrderID = ? AND CompanyID = ?`,
           [newStatus, PurchaseOrderID, companyId]
+        );
+      }
+    }
+
+    // 3b) If linked to a DirectPurchase, update its Status based on received qty
+    if (DirectPurchaseID) {
+      const [aggRows] = await conn.query(
+        `SELECT
+           SUM(Quantity) AS TotalOrdered,
+           SUM(ReceivedQuantity) AS TotalReceived
+         FROM DirectPurchaseItems
+         WHERE DirectPurchaseID = ?`,
+        [DirectPurchaseID]
+      );
+
+      if (aggRows.length > 0) {
+        const totals = aggRows[0];
+        const totalOrdered = Number(totals.TotalOrdered || 0);
+        const totalReceived = Number(totals.TotalReceived || 0);
+
+        let newStatus = "Pending";
+
+        if (totalReceived <= 0) {
+          newStatus = "Pending";
+        } else if (totalReceived < totalOrdered) {
+          newStatus = "PartiallyReceived";
+        } else if (totalOrdered > 0 && totalReceived >= totalOrdered) {
+          newStatus = "Received";
+        }
+
+        await conn.query(
+          `UPDATE DirectPurchases
+           SET Status = ?
+           WHERE DirectPurchaseID = ? AND CompanyID = ?`,
+          [newStatus, DirectPurchaseID, companyId]
         );
       }
     }

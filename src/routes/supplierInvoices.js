@@ -87,6 +87,7 @@ router.get("/", async (req, res) => {
          si.Status,
          si.PurchaseOrderID,
          si.GoodsReceiptID,
+         si.DirectPurchaseID,
          si.SiiTrackID
        FROM SupplierInvoices si
        LEFT JOIN Suppliers s ON si.SupplierID = s.SupplierID
@@ -113,11 +114,13 @@ router.get("/:id", async (req, res) => {
          si.*,
          s.SupplierName,
          po.PurchaseOrderNumber,
-         gr.ReceiptNumber AS GoodsReceiptNumber
+         gr.ReceiptNumber AS GoodsReceiptNumber,
+         dp.ReceiptNumber AS DirectPurchaseReceiptNumber
        FROM SupplierInvoices si
        LEFT JOIN Suppliers s ON si.SupplierID = s.SupplierID
        LEFT JOIN PurchaseOrders po ON si.PurchaseOrderID = po.PurchaseOrderID
        LEFT JOIN GoodsReceipts gr ON si.GoodsReceiptID = gr.GoodsReceiptID
+       LEFT JOIN DirectPurchases dp ON si.DirectPurchaseID = dp.DirectPurchaseID
        WHERE si.SupplierInvoiceID = ? AND si.CompanyID = ?`,
       [invoiceId, companyId]
     );
@@ -171,6 +174,7 @@ router.post("/", async (req, res) => {
     TaxAmount,
     PurchaseOrderID,
     GoodsReceiptID,
+    DirectPurchaseID,
     SiiTrackID,
     Notes,
     Items,
@@ -207,9 +211,9 @@ router.post("/", async (req, res) => {
          CompanyID, SupplierID, DocumentType, InvoiceNumber_Supplier,
          IsSupplierDocExenta, InvoiceDate, DueDate, TotalAmount, TaxAmount,
          AmountPaid, Status,
-         PurchaseOrderID, GoodsReceiptID, SiiTrackID, Notes
+         PurchaseOrderID, GoodsReceiptID, DirectPurchaseID, SiiTrackID, Notes
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         companyId,
         SupplierID,
@@ -224,6 +228,7 @@ router.post("/", async (req, res) => {
         "Unpaid", // initial status
         PurchaseOrderID || null,
         GoodsReceiptID || null,
+        DirectPurchaseID || null,
         SiiTrackID || null,
         Notes || null,
       ]

@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<DTE version="1.0">
+  <Documento ID="G61A8E2B4">
+    <Encabezado>
+      <IdDoc>
+        <TipoDTE>52</TipoDTE>
+        <Folio>5642</Folio>
+        <FchEmis>2025-02-20</FchEmis>
+        <IndTraslado>01</IndTraslado>
+      </IdDoc>
+      <Emisor>
+        <RUT>77584117-6</RUT>
+        <RznSoc>CARTIVELAS LIMITADA</RznSoc>
+        <GiroEmis>FABRICACIÓN DE VELAS</GiroEmis>
+        <Acteco>3291</Acteco>
+        <DirOrigen>BADAJOZ 100 OF 621</DirOrigen>
+        <CmnaOrigen>LAS CONDES</CmnaOrigen>
+        <CiudadOrigen>SANTIAGO</CiudadOrigen>
+      </Emisor>
+      <Receptor>
+        <RUT>76389753-K</RUT>
+        <RznSocRecep>COMERCIAL MULTI SPA</RznSocRecep>
+        <GiroRecep>VENTA AL POR MENOR</GiroRecep>
+        <ContactoRecep>Jorge Pérez</ContactoRecep>
+        <DirRecep>AV. GRECIA 3456</DirRecep>
+        <CmnaRecep>LAS CONDES</CmnaRecep>
+        <CiudadRecep>SANTIAGO</CiudadRecep>
+      </Receptor>
+      <Totales>
+        <MntNeto>0</MntNeto>
+        <IVA>0</IVA>
+        <MntTotal>0</MntTotal>
+      </Totales>
+    </Encabezado>
+    <Detalle>
+      <Item>
+        <NroLinDet>1</NroLinDet>
+        <TpoCodigo>INT1</TpoCodigo>
+        <VlrCodigo>7702159876543</VlrCodigo>
+        <NmbItem>VELA LISA NARANJA 1.7X18</NmbItem>
+        <DscItem>Vela cilíndrica lisa color naranja</DscItem>
+        <QtyItem>2.0000</QtyItem>
+        <UnmdItem>UNIDAD</UnmdItem>
+      </Item>
+      <Item>
+        <NroLinDet>2</NroLinDet>
+        <TpoCodigo>INT1</TpoCodigo>
+        <VlrCodigo>7702159876544</VlrCodigo>
+        <NmbItem>VELA LISA CELESTE 1.7X18</NmbItem>
+        <DscItem>Vela cilíndrica lisa color celeste</DscItem>
+        <QtyItem>1.0000</QtyItem>
+        <UnmdItem>UNIDAD</UnmdItem>
+      </Item>
+      <Item>
+        <NroLinDet>3</NroLinDet>
+        <TpoCodigo>INT1</TpoCodigo>
+        <VlrCodigo>7702159876545</VlrCodigo>
+        <NmbItem>CIRIO 5X5 NEGRO</NmbItem>
+        <DscItem>Vela cuadrada 5x5 color negro</DscItem>
+        <QtyItem>50.0000</QtyItem>
+        <UnmdItem>UNIDAD</UnmdItem>
+      </Item>
+      <Item>
+        <NroLinDet>4</NroLinDet>
+        <TpoCodigo>INT1</TpoCodigo>
+        <VlrCodigo>7702159876546</VlrCodigo>
+        <NmbItem>CIRIO 5X10 BLANCO</NmbItem>
+        <DscItem>Vela cuadrada 5x10 color blanco</DscItem>
+        <QtyItem>50.0000</QtyItem>
+        <UnmdItem>UNIDAD</UnmdItem>
+      </Item>
+      <Item>
+        <NroLinDet>5</NroLinDet>
+        <TpoCodigo>INT1</TpoCodigo>
+        <VlrCodigo>7702159876547</VlrCodigo>
+        <NmbItem>CIRIO 5X15 BLANCO</NmbItem>
+        <DscItem>Vela cuadrada 5x15 color blanco</DscItem>
+        <QtyItem>50.0000</QtyItem>
+        <UnmdItem>UNIDAD</UnmdItem>
+      </Item>
+    </Detalle>
+    <Referencia>
+      <NroLinRef>1</NroLinRef>
+      <TpoDocRef>33</TpoDocRef>
+      <FolioRef>2854</FolioRef>
+      <FchRef>2025-02-20</FchRef>
+      <RazonRef>Factura que respalda esta Guía de Despacho</RazonRef>
+    </Referencia>
+    <TED>
+      <DD>
+        <RE>77584117-6</RE>
+        <TD>52</TD>
+        <F>5642</F>
+        <FE>2025-02-20</FE>
+        <RR>76389753-K</RR>
+        <RSR>COMERCIAL MULTI SPA</RSR>
+        <MNT>0</MNT>
+        <IT1>VELA LISA NARANJA 1.7X18</IT1>
+        <IT2>VELA LISA CELESTE 1.7X18</IT2>
+        <CAF version="1.0">
+          <DA>
+            <RE>77584117-6</RE>
+            <TD>52</TD>
+            <RS>CARTIVELAS LIMITADA</RS>
+            <RNG>
+              <D>5601</D>
+              <H>5700</H>
+            </RNG>
+            <FA>2025-02-01</FA>
+          </DA>
+          <FRMA>xxxxxxxxxxxxxxxxxxx+Jh2Mc/VqxxxxxxxxxxxJhxxxxxx==</FRMA>
+        </CAF>
+      </DD>
+      <FRMT algorithm="SHA1withRSA">xxxxxxxxxxxxxxxxxxx+Jh2Mc/VqxxxxxxxxxxxJhxxxxxx==</FRMT>
+    </TED>
+  </Documento>
+  <Signature>
+    <SignedInfo>
+      <CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/>
+      <SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
+      <Reference URI="#G61A8E2B4">
+        <Transforms>
+          <Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/>
+        </Transforms>
+        <DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
+        <DigestValue>xxxxxxxxxxxxxxxxxxx</DigestValue>
+      </Reference>
+    </SignedInfo>
+    <SignatureValue>xxxxxxxxxxxxxxxxxxx</SignatureValue>
+    <KeyInfo>
+      <X509Data>
+        <X509Certificate>xxxxxxxxxxxxxxxxxxxxx</X509Certificate>
+      </X509Data>
+    </KeyInfo>
+  </Signature>
+</DTE>
