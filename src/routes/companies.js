@@ -86,7 +86,9 @@ router.get("/:id", async (req, res) => {
 // POST /api/companies  -> create new company
 router.post("/", async (req, res) => {
   if (!isSuperAdmin(req.user)) {
-    return res.status(403).json({ error: "Only SuperAdmin can create companies" });
+    return res
+      .status(403)
+      .json({ error: "Only SuperAdmin can create companies" });
   }
 
   const { CompanyName, LegalName, TaxID, City, CountryCode, Email } = req.body;

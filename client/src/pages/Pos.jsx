@@ -2042,21 +2042,53 @@ export default function Pos() {
     const todayCode = dayCodes[new Date().getDay()];
     const channel = "POS";
 
-    const lineNet = (item) => {
-      const gross = Number(item.UnitPrice) * Number(item.Quantity);
-      const lineDisc = computeLineDiscountAmount(item);
-      return Math.max(0, gross - lineDisc);
+    const computeLineAmounts = (line) => {
+      const qty = Number(line.Quantity || 0);
+      if (qty <= 0) return null;
+      const unitPrice = Number(line.UnitPrice) || 0;
+      const gross = unitPrice * qty;
+      const lineDisc = computeLineDiscountAmount(line);
+      const netWithTax = Math.max(0, gross - lineDisc);
+      const rate = line.IsTaxable ? Number(line.TaxRatePercentage || 0) : 0;
+      const base =
+        rate > 0 && priceIncludesTax ? netWithTax / (1 + rate / 100) : netWithTax;
+      const display =
+        rate > 0
+          ? priceIncludesTax
+            ? netWithTax
+            : base * (1 + rate / 100)
+          : base;
+      if (base <= 0 && display <= 0) return null;
+      return {
+        line,
+        qty,
+        rate,
+        base,
+        display,
+        unitBase: base / qty,
+        unitDisplay: display / qty,
+      };
     };
 
     const parsedPromos = (promotions || []).map((p) => {
       const scopes = p.scopes || p.scope || {};
+      const rawUnit = p.unitPrice ?? p.UnitPrice;
+      let unitPrice =
+        rawUnit === undefined || rawUnit === null ? null : Number(rawUnit);
+      const promoType = p.type || p.Type || "percent";
+      if (unitPrice === 0 && promoType !== "unit") {
+        unitPrice = null;
+      }
       return {
         id: p.id || p.PromotionID,
         name: p.name || p.Name || "Promotion",
         enabled: p.enabled ?? p.Enabled ?? true,
-        type: p.type || p.Type || "percent",
-        value: Number(p.value ?? p.Value ?? 0),
-        unitPrice: p.unitPrice ?? p.UnitPrice ?? null,
+        type: promoType,
+        value: (() => {
+          const raw = Number(p.value ?? p.Value ?? 0) || 0;
+          return raw > 0 && raw < 1 ? raw * 100 : raw;
+        })(),
+        unitPrice,
         priority: p.priority ?? p.Priority ?? 0,
         stackable: p.stackable ?? p.Stackable ?? true,
         minQuantity: p.minQuantity ?? p.MinQuantity ?? null,
@@ -2079,6 +2111,14 @@ export default function Pos() {
       };
     });
 
+    const dedupedPromos = Array.from(
+      new Map(parsedPromos.map((p) => [String(p.id || ""), p])).values()
+    );
+
+    const debugPromos =
+      typeof window !== "undefined" &&
+      window.localStorage?.getItem("debugPromos") === "1";
+
     const cartLines = (cart || []).map((line, idx) => ({
       ...line,
       __idx: idx,
@@ -2098,7 +2138,8 @@ export default function Pos() {
 
     const now = new Date();
     const applied = [];
-    const ordered = parsedPromos
+    let hasFreeShipping = false;
+    const ordered = dedupedPromos
       .filter((p) => p.enabled)
       .sort((a, b) => (b.priority || 0) - (a.priority || 0));
 
@@ -2125,7 +2166,7 @@ export default function Pos() {
       return checks.length ? checks.some(Boolean) : true;
     };
 
-    let totalDiscount = 0;
+    let totalDiscountBase = 0;
     const overrides = {};
     for (const promo of ordered) {
       if (promo.startAt && now < new Date(promo.startAt)) continue;
@@ -2157,65 +2198,263 @@ export default function Pos() {
       );
       if (promo.minQuantity && qtyTotal < promo.minQuantity) continue;
 
-      const eligibleSubtotal = eligibleLines.reduce(
-        (sum, line) => sum + lineNet(line),
+      const eligibleItems = eligibleLines
+        .map((line) => computeLineAmounts(line))
+        .filter(Boolean);
+      if (!eligibleItems.length) continue;
+
+      const eligibleSubtotal = eligibleItems.reduce(
+        (sum, item) => sum + item.base,
         0
       );
-      if (eligibleSubtotal <= 0) continue;
+      const eligibleDisplay = eligibleItems.reduce(
+        (sum, item) => sum + item.display,
+        0
+      );
+      if (eligibleSubtotal <= 0 && eligibleDisplay <= 0) continue;
 
-      let promoDiscount = 0;
-      let overrideSavings = 0;
+      const conversionFactor =
+        eligibleSubtotal > 0 ? eligibleDisplay / eligibleSubtotal : 1;
+
+      let promoDiscountBase = 0;
+      let promoDiscountDisplay = 0;
+      let overrideBase = 0;
+      let overrideDisplay = 0;
+
+      const isShippingPromo = promo.type === "shipping";
+
       if (promo.unitPrice !== null && promo.unitPrice !== undefined) {
-        const target = Number(promo.unitPrice) || 0;
-        overrideSavings = eligibleLines.reduce((sum, line) => {
-          const qty = Number(line.Quantity || 0);
-          if (qty <= 0) return sum;
-          const unitNet = lineNet(line) / qty;
-          const perUnitSavings = Math.max(0, unitNet - target);
-          const savings = perUnitSavings * qty;
-          if (perUnitSavings > 0) {
-            const existing = overrides[line.__idx];
-            if (!existing || target < existing.targetPrice) {
-              overrides[line.__idx] = { targetPrice: target, savings };
-            } else if (existing && target === existing.targetPrice) {
-              overrides[line.__idx].savings = (existing.savings || 0) + savings;
-            }
+        const rawTarget = Number(promo.unitPrice) || 0;
+        eligibleItems.forEach((item) => {
+          const targetBase =
+            priceIncludesTax && item.rate > 0
+              ? rawTarget / (1 + item.rate / 100)
+              : rawTarget;
+          const perUnitSavingsBase = Math.max(0, item.unitBase - targetBase);
+          if (perUnitSavingsBase <= 0) return;
+          const lineBaseSavings = perUnitSavingsBase * item.qty;
+          overrideBase += lineBaseSavings;
+
+          const targetDisplay = priceIncludesTax
+            ? rawTarget
+            : item.rate > 0
+            ? targetBase * (1 + item.rate / 100)
+            : targetBase;
+          const lineDisplaySavings = Math.max(
+            0,
+            item.unitDisplay - targetDisplay
+          ) * item.qty;
+          overrideDisplay += lineDisplaySavings;
+
+          const storedTargetPrice = priceIncludesTax
+            ? targetDisplay
+            : targetBase;
+          const existing = overrides[item.line.__idx];
+          if (!existing || storedTargetPrice < existing.targetPrice) {
+            overrides[item.line.__idx] = {
+              targetPrice: storedTargetPrice,
+              savings: lineDisplaySavings,
+            };
+          } else if (
+            existing &&
+            Math.abs(existing.targetPrice - storedTargetPrice) < 0.000001
+          ) {
+            overrides[item.line.__idx].savings =
+              (existing.savings || 0) + lineDisplaySavings;
           }
-          return sum + savings;
-        }, 0);
-        promoDiscount = 0; // handled via price override
+        });
+      } else if (isShippingPromo) {
+        hasFreeShipping = true;
+        if (debugPromos) {
+          console.debug("PROMO SHIPPING DBG", {
+            promoId: promo.id,
+            eligibleSubtotal,
+            eligibleDisplay,
+          });
+        }
       } else if (promo.type === "percent") {
         const pct = Math.max(0, Math.min(100, promo.value || 0));
-        promoDiscount = (eligibleSubtotal * pct) / 100;
+        promoDiscountBase = (eligibleSubtotal * pct) / 100;
+        promoDiscountDisplay = (eligibleDisplay * pct) / 100;
+        if (debugPromos) {
+          console.debug("PROMO DBG", {
+            promoId: promo.id,
+            rawValue: promo.value,
+            pct,
+            eligibleSubtotal,
+            eligibleDisplay,
+            promoDiscountBase,
+            promoDiscountDisplay,
+          });
+        }
       } else if (promo.type === "amount") {
-        promoDiscount = Math.min(
-          eligibleSubtotal,
-          Math.max(0, promo.value || 0)
-        );
-      } else {
-        promoDiscount = 0;
+        const rawAmount = Math.max(0, Number(promo.value) || 0);
+        if (priceIncludesTax) {
+          const cappedDisplay = Math.min(eligibleDisplay, rawAmount);
+          promoDiscountDisplay = cappedDisplay;
+          const factor = conversionFactor > 0 ? conversionFactor : 1;
+          promoDiscountBase = Math.min(
+            eligibleSubtotal,
+            cappedDisplay / Math.max(factor, 1e-9)
+          );
+        } else {
+          const cappedBase = Math.min(eligibleSubtotal, rawAmount);
+          promoDiscountBase = cappedBase;
+          const factor = conversionFactor > 0 ? conversionFactor : 1;
+          promoDiscountDisplay = Math.min(
+            eligibleDisplay,
+            cappedBase * factor
+          );
+        }
+      } else if (promo.type === "bogo") {
+        const buyQty = Number(promo.minQuantity || 0);
+        const getQty = Math.floor(Number(promo.value || 0));
+        if (buyQty > 0 && getQty > 0) {
+          const unitSnapshots = [];
+          eligibleItems.forEach((item) => {
+            for (let i = 0; i < item.qty; i++) {
+              unitSnapshots.push({
+                base: item.unitBase,
+                display: item.unitDisplay,
+              });
+            }
+          });
+          if (unitSnapshots.length) {
+            unitSnapshots.sort((a, b) => (a.base || 0) - (b.base || 0));
+            const groupSize = buyQty + getQty;
+            const groups = Math.floor(unitSnapshots.length / groupSize);
+            let freeUnits = groups * getQty;
+            if (freeUnits === 0 && unitSnapshots.length >= buyQty) {
+              freeUnits = Math.floor(unitSnapshots.length / buyQty) * getQty;
+            }
+            freeUnits = Math.min(freeUnits, unitSnapshots.length);
+            const freebies = unitSnapshots.slice(0, freeUnits);
+            promoDiscountBase = freebies.reduce(
+              (sum, unit) => sum + (unit.base || 0),
+              0
+            );
+            promoDiscountDisplay = freebies.reduce(
+              (sum, unit) => sum + (unit.display || 0),
+              0
+            );
+          }
+        }
+      } else if (promo.type === "bundle") {
+        const components = (promo.scopes && promo.scopes.products) || [];
+        if (components.length) {
+          const compMap = {};
+          components.forEach(
+            (c) => (compMap[String(c).toLowerCase()] = [])
+          );
+          eligibleItems.forEach((item) => {
+            const line = item.line;
+            const prodName = (
+              line.ProductName ||
+              line.productName ||
+              line.Name ||
+              line.name ||
+              line.SKU ||
+              ""
+            ).toString();
+            const key = prodName.toLowerCase();
+            if (!compMap[key]) return;
+            for (let i = 0; i < item.qty; i++) {
+              compMap[key].push({
+                base: item.unitBase,
+                display: item.unitDisplay,
+              });
+            }
+          });
+
+          const counts = components.map(
+            (c) => (compMap[String(c).toLowerCase()] || []).length
+          );
+          const possible = counts.length ? Math.min(...counts) : 0;
+          if (possible > 0) {
+            components.forEach((c) => {
+              const arr = compMap[String(c).toLowerCase()] || [];
+              arr.sort((a, b) => (a?.base || 0) - (b?.base || 0));
+            });
+            const bundlePriceInput = Number(promo.value || 0);
+            for (let i = 0; i < possible; i++) {
+              let bundleSumBase = 0;
+              let bundleSumDisplay = 0;
+              for (const c of components) {
+                const arr = compMap[String(c).toLowerCase()] || [];
+                const unit = arr[i];
+                bundleSumBase += unit?.base || 0;
+                bundleSumDisplay += unit?.display || 0;
+              }
+              if (bundleSumBase <= 0 && bundleSumDisplay <= 0) continue;
+              const localFactor =
+                bundleSumBase > 0
+                  ? bundleSumDisplay / bundleSumBase
+                  : conversionFactor;
+              const targetBase = priceIncludesTax
+                ? bundlePriceInput / Math.max(localFactor, 1e-9)
+                : bundlePriceInput;
+              const targetDisplay = priceIncludesTax
+                ? bundlePriceInput
+                : bundlePriceInput * (localFactor > 0 ? localFactor : 1);
+              const savingBase = Math.max(0, bundleSumBase - targetBase);
+              const savingDisplay = Math.max(
+                0,
+                bundleSumDisplay - targetDisplay
+              );
+              promoDiscountBase += savingBase;
+              promoDiscountDisplay += savingDisplay;
+            }
+            if (debugPromos) {
+              console.debug("PROMO BUNDLE DBG", {
+                promoId: promo.id,
+                components,
+                possible,
+                bundlePriceInput,
+                promoDiscountBase,
+                promoDiscountDisplay,
+              });
+            }
+          }
+        }
       }
 
-      if (promoDiscount > 0 || overrideSavings > 0) {
-        if (promoDiscount > 0) {
-          totalDiscount += promoDiscount;
-        }
-        applied.push({
-          id: promo.id,
-          name: promo.name,
-          amount: promoDiscount || overrideSavings,
-        });
-        if (!promo.stackable) break;
-      }
+      const totalBaseSavings = promoDiscountBase + overrideBase;
+      const totalDisplaySavingsRaw =
+        promoDiscountDisplay + overrideDisplay;
+
+      if (
+        !isShippingPromo &&
+        totalBaseSavings <= 0 &&
+        totalDisplaySavingsRaw <= 0
+      )
+        continue;
+
+      const fallbackDisplay =
+        totalBaseSavings > 0
+          ? totalBaseSavings * (conversionFactor > 0 ? conversionFactor : 1)
+          : 0;
+      const finalDisplaySavings =
+        totalDisplaySavingsRaw > 0 ? totalDisplaySavingsRaw : fallbackDisplay;
+
+      totalDiscountBase += Math.max(0, totalBaseSavings);
+      applied.push({
+        id: promo.id,
+        name: promo.name,
+        type: promo.type,
+        amount: isShippingPromo ? 0 : Math.max(0, finalDisplaySavings),
+        amountBase: isShippingPromo ? 0 : Math.max(0, totalBaseSavings),
+      });
+      if (!promo.stackable) break;
     }
 
-    return { discount: totalDiscount, applied, overrides };
-  }, [cart, promotions, selectedCustomer, selectedEmployee]);
+    return { discount: totalDiscountBase, applied, overrides, hasFreeShipping };
+  }, [cart, promotions, selectedCustomer, selectedEmployee, priceIncludesTax]);
 
   const {
     discount: promotionDiscountAmount = 0,
     applied: appliedPromotions = [],
     overrides: promotionOverrides = {},
+    hasFreeShipping: freeShippingApplied = false,
   } = computePromotionsDiscount;
 
   const subtotal = useMemo(
@@ -2282,8 +2521,32 @@ export default function Pos() {
     }, 0);
   }, [cart, promotionOverrides]);
 
+  const grossBeforePromotions = useMemo(() => {
+    return cart.reduce((sum, item) => {
+      const qty = Number(item.Quantity) || 0;
+      if (!qty) return sum;
+      const unitPrice = Number(item.UnitPrice) || 0;
+      const gross = unitPrice * qty;
+      let lineDisc = 0;
+      if (item.DiscountType === "amount") {
+        lineDisc = Math.min(
+          gross,
+          Math.max(0, Number(item.DiscountValue) || 0)
+        );
+      } else if (item.DiscountType === "percent") {
+        const pct = Math.max(0, Math.min(100, Number(item.DiscountValue) || 0));
+        lineDisc = (gross * pct) / 100;
+      }
+      const net = Math.max(0, gross - lineDisc);
+      const rate = item.IsTaxable ? Number(item.TaxRatePercentage || 0) : 0;
+      if (rate <= 0) return sum + net;
+      if (priceIncludesTax) return sum + net;
+      return sum + net * (1 + rate / 100);
+    }, 0);
+  }, [cart, priceIncludesTax]);
+
   const taxTotal = useMemo(() => {
-    return cart.reduce((sum, item, idx) => {
+    const preTax = cart.reduce((sum, item, idx) => {
       const effectivePrice =
         promotionOverrides && promotionOverrides[idx]?.targetPrice !== undefined
           ? Number(promotionOverrides[idx].targetPrice)
@@ -2309,14 +2572,30 @@ export default function Pos() {
       }
       return sum + (netBeforeTax * rate) / 100;
     }, 0);
-  }, [cart, priceIncludesTax, promotionOverrides]);
+
+    const totalReducingDiscounts =
+      Number(globalDiscountAmount || 0) + Number(promotionDiscountAmount || 0);
+    if (preTax <= 0 || subtotal <= 0 || totalReducingDiscounts <= 0)
+      return Math.max(0, preTax);
+    const taxAdjustment = (totalReducingDiscounts * preTax) / subtotal;
+    return Math.max(0, preTax - taxAdjustment);
+  }, [
+    cart,
+    priceIncludesTax,
+    promotionOverrides,
+    promotionDiscountAmount,
+    globalDiscountAmount,
+    subtotal,
+  ]);
 
   const finalTotal = Math.max(
     subtotal - globalDiscountAmount - promotionDiscountAmount + taxTotal,
     0
   );
-  const totalDiscounts =
-    lineDiscountTotal + globalDiscountAmount + promotionDiscountAmount;
+  const totalDiscountsDisplay = Math.max(
+    0,
+    grossBeforePromotions - finalTotal
+  );
 
   const getReceiptPrefs = () => {
     const defaults = {
@@ -2409,20 +2688,22 @@ export default function Pos() {
         )}</span></div>`
       : "";
     const discountLine =
-      sizeCfg.showDiscount && totalDiscounts > 0
+      sizeCfg.showDiscount && totalDiscountsDisplay > 0
         ? `<div class="row"><span>Discount</span><span>-${currencyFormatter.format(
-            totalDiscounts
+            totalDiscountsDisplay
           )}</span></div>`
         : "";
 
     const promosLine = appliedPromotions.length
       ? appliedPromotions
-          .map(
-            (p) =>
-              `<div class="promo-line"><span>Promo: ${
-                p.name || "Promotion"
-              }</span><span>-${currencyFormatter.format(p.amount)}</span></div>`
-          )
+          .map((p) => {
+            const label = `Promo: ${p.name || "Promotion"}`;
+            const value =
+              p.type === "shipping"
+                ? "Free shipping"
+                : `-${currencyFormatter.format(p.amount)}`;
+            return `<div class="promo-line"><span>${label}</span><span>${value}</span></div>`;
+          })
           .join("")
       : "";
 
@@ -2573,8 +2854,9 @@ export default function Pos() {
       totals: {
         subtotal,
         tax: taxTotal,
-        discount: totalDiscounts,
+        discount: totalDiscountsDisplay,
         total: finalTotal,
+        freeShipping: freeShippingApplied,
       },
       status: status?.message || "",
     });
@@ -3603,8 +3885,15 @@ export default function Pos() {
                     key={p.id || p.name}
                     style={{ display: "flex", justifyContent: "space-between" }}
                   >
-                    <span>Promo: {p.name || "Promotion"}</span>
-                    <span>-{currencyFormatter.format(p.amount)}</span>
+                    <span>
+                      Promo: {p.name || "Promotion"}
+                      {p.type === "shipping" ? " (Free shipping)" : ""}
+                    </span>
+                    <span>
+                      {p.type === "shipping"
+                        ? "Free shipping"
+                        : `-${currencyFormatter.format(p.amount)}`}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -3625,7 +3914,7 @@ export default function Pos() {
             </div>
             <div>
               <p>Discount</p>
-              <strong>-{currencyFormatter.format(totalDiscounts)}</strong>
+              <strong>-{currencyFormatter.format(totalDiscountsDisplay)}</strong>
             </div>
             {appliedPromotions.length > 0 && (
               <div className="promotions-summary">
@@ -3633,8 +3922,10 @@ export default function Pos() {
                 <div className="muted small">
                   {appliedPromotions.map((p) => (
                     <div key={p.id || p.name}>
-                      {p.name || "Promotion"}: -
-                      {currencyFormatter.format(p.amount)}
+                      {p.name || "Promotion"}:{" "}
+                      {p.type === "shipping"
+                        ? "Free shipping"
+                        : `-${currencyFormatter.format(p.amount)}`}
                     </div>
                   ))}
                 </div>

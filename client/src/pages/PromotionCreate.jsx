@@ -55,7 +55,11 @@ const hydrateDraftFromPromo = (promo) => {
     description: promo.description || promo.Description || "",
     unitPrice: promo.unitPrice ?? promo.UnitPrice ?? "",
     type: promo.unitPrice || promo.UnitPrice ? "unit" : promo.type || promo.Type || "percent",
-    value: promo.unitPrice || promo.UnitPrice ? "" : promo.value ?? promo.Value ?? 0,
+    // Normalize percent values: treat fractional values (0 < v < 1) as fractions and scale to percent
+    value: (() => {
+      const raw = promo.unitPrice || promo.UnitPrice ? "" : Number(promo.value ?? promo.Value ?? 0) || 0;
+      return raw > 0 && raw < 1 ? raw * 100 : raw;
+    })(),
     enabled: promo.enabled ?? promo.Enabled ?? true,
     scope: {
       ...defaultDraft.scope,
@@ -125,6 +129,20 @@ export default function PromotionCreate() {
   const [availableBrands, setAvailableBrands] = useState([]);
   const [availableEmployees, setAvailableEmployees] = useState([]);
   const [availableCustomFields, setAvailableCustomFields] = useState([]);
+
+  const promoTooltips = {
+    percent:
+      "Percentage discount applied to eligible items. Enter a percent value (e.g. 10 for 10%).",
+    amount:
+      "Fixed amount discount applied to eligible items (currency). Enter the amount to subtract.",
+    unit:
+      "Set a target unit price for eligible items. Use the Unit price field to set the new per-unit price.",
+    bogo:
+      "Buy X Get Y: set 'Value' = Y (free units) and 'Min quantity (trigger)' (right column) = X.",
+    bundle:
+      "Bundle price: configure the component products in Scope & eligibility so the bundle applies.",
+    shipping: "Free shipping for eligible orders. Applies at checkout.",
+  };
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -307,6 +325,19 @@ export default function PromotionCreate() {
     });
   };
 
+  const handleTypeChange = (nextType) => {
+    setDraft((prev) => {
+      const base = { ...prev, type: nextType };
+      if (nextType === "unit") {
+        return { ...base, value: "", unitPrice: prev.unitPrice || "" };
+      }
+      if (nextType === "shipping") {
+        return { ...base, value: 0, unitPrice: "" };
+      }
+      return { ...base, unitPrice: "" };
+    });
+  };
+
   const handleSave = async () => {
     if (!canSave) {
       setStatus({ type: "error", message: t("promotions.create.validationRequired") });
@@ -315,11 +346,16 @@ export default function PromotionCreate() {
     setSaving(true);
     setStatus({ type: "", message: "" });
     try {
+      const isShippingPromo = draft.type === "shipping";
       const typeToSend = draft.type === "unit" ? "amount" : draft.type;
       const unitPrice =
         draft.type === "unit" && draft.unitPrice !== "" ? Number(draft.unitPrice) : null;
-      const numericValue =
-        draft.type === "unit" ? 0 : Number(draft.value !== "" ? draft.value : 0);
+      // Normalize numeric value: if user entered a fraction (0 < v < 1) treat as fraction and scale to percent
+      const rawVal =
+        draft.type === "unit" || isShippingPromo
+          ? 0
+          : Number(draft.value !== "" ? draft.value : 0);
+      const numericValue = rawVal > 0 && rawVal < 1 ? rawVal * 100 : rawVal;
       const payload = {
         name: draft.name,
         code: (draft.code || "").trim() || null,
@@ -625,7 +661,7 @@ export default function PromotionCreate() {
               {t("promotions.create.type")}
               <select
                 value={draft.type}
-                onChange={(e) => setDraft((prev) => ({ ...prev, type: e.target.value }))}
+                onChange={(e) => handleTypeChange(e.target.value)}
               >
                 {Object.entries(typeLabels).map(([key, label]) => (
                   <option key={key} value={key}>
@@ -646,7 +682,8 @@ export default function PromotionCreate() {
                   step="0.01"
                 />
               </label>
-            ) : (
+            ) : null}
+            {draft.type !== "unit" && draft.type !== "shipping" ? (
               <label>
                 {t("promotions.create.value")}
                 <input
@@ -658,7 +695,12 @@ export default function PromotionCreate() {
                   step="0.01"
                 />
               </label>
-            )}
+            ) : null}
+            {draft.type === "shipping" ? (
+              <div style={{ paddingTop: 24 }}>
+                <p className="muted small">Shipping charges will be zero when this promo applies.</p>
+              </div>
+            ) : null}
             <label className="checkbox" style={{ marginTop: 22 }}>
               <input
                 type="checkbox"
@@ -667,6 +709,9 @@ export default function PromotionCreate() {
               />
               <span>{t("promotions.create.enableOnSave")}</span>
             </label>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <p className="muted small">{promoTooltips[draft.type] || ""}</p>
           </div>
         </div>
 

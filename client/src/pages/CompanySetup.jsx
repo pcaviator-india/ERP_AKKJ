@@ -17,7 +17,10 @@ export default function CompanySetup() {
     City: "",
     Address: "",
   });
-  const [taxConfig, setTaxConfig] = useState({ defaultTaxRateId: "", priceIncludesTax: false });
+  const [taxConfig, setTaxConfig] = useState({
+    defaultTaxRateId: "",
+    priceIncludesTax: false,
+  });
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState({ type: "", message: "" });
 
@@ -89,7 +92,9 @@ export default function CompanySetup() {
       await updateConfig({
         tax: {
           defaultTaxRateId:
-            taxConfig.defaultTaxRateId === "" ? null : Number(taxConfig.defaultTaxRateId),
+            taxConfig.defaultTaxRateId === ""
+              ? null
+              : Number(taxConfig.defaultTaxRateId),
           priceIncludesTax: !!taxConfig.priceIncludesTax,
         },
       });
@@ -102,7 +107,9 @@ export default function CompanySetup() {
       }
     } catch (error) {
       const message =
-        error.response?.data?.error || error.message || "Failed to save company";
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to save company";
       setStatus({ type: "error", message });
     } finally {
       setLoading(false);
@@ -113,7 +120,8 @@ export default function CompanySetup() {
     <div className="page narrow">
       <h2>Company profile</h2>
       <p className="muted">
-        These fields map to the <code>Companies</code> table in the backend schema. When wired, this form can submit to
+        These fields map to the <code>Companies</code> table in the backend
+        schema. When wired, this form can submit to
         <code>/api/companies</code>.
       </p>
       <form className="card form" onSubmit={handleSubmit}>
@@ -139,54 +147,74 @@ export default function CompanySetup() {
         </label>
         <label>
           Country
-          <input type="text" name="Country" value={form.Country} onChange={handleChange} />
+          <input
+            type="text"
+            name="Country"
+            value={form.Country}
+            onChange={handleChange}
+          />
         </label>
         <label>
           City
-          <input type="text" name="City" value={form.City} onChange={handleChange} />
+          <input
+            type="text"
+            name="City"
+            value={form.City}
+            onChange={handleChange}
+          />
         </label>
         <label>
-        Address
-        <input type="text" name="Address" value={form.Address} onChange={handleChange} />
-      </label>
-      <div className="card" style={{ marginTop: "1rem" }}>
-        <h3>Tax (IVA) defaults</h3>
-        <p className="muted small">Set a default IVA rate and whether prices include tax.</p>
-        <div className="grid two">
-          <label>
-            Default tax rate
-            <select
-              value={taxConfig.defaultTaxRateId}
-              onChange={(e) =>
-                setTaxConfig((prev) => ({
-                  ...prev,
-                  defaultTaxRateId: e.target.value,
-                }))
-              }
-            >
-              <option value="">Select</option>
-              {taxRates.map((r) => (
-                <option key={r.TaxRateID} value={r.TaxRateID}>
-                  {r.Name} ({Number(r.RatePercentage || 0)}%)
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="toggle inline-check">
-            <span>Prices include tax</span>
-            <input
-              type="checkbox"
-              checked={!!taxConfig.priceIncludesTax}
-              onChange={(e) =>
-                setTaxConfig((prev) => ({ ...prev, priceIncludesTax: e.target.checked }))
-              }
-            />
-          </label>
+          Address
+          <input
+            type="text"
+            name="Address"
+            value={form.Address}
+            onChange={handleChange}
+          />
+        </label>
+        <div className="card" style={{ marginTop: "1rem" }}>
+          <h3>Tax (IVA) defaults</h3>
+          <p className="muted small">
+            Set a default IVA rate and whether prices include tax.
+          </p>
+          <div className="grid two">
+            <label>
+              Default tax rate
+              <select
+                value={taxConfig.defaultTaxRateId}
+                onChange={(e) =>
+                  setTaxConfig((prev) => ({
+                    ...prev,
+                    defaultTaxRateId: e.target.value,
+                  }))
+                }
+              >
+                <option value="">Select</option>
+                {taxRates.map((r) => (
+                  <option key={r.TaxRateID} value={r.TaxRateID}>
+                    {r.Name} ({Number(r.RatePercentage || 0)}%)
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="toggle inline-check">
+              <span>Prices include tax</span>
+              <input
+                type="checkbox"
+                checked={!!taxConfig.priceIncludesTax}
+                onChange={(e) =>
+                  setTaxConfig((prev) => ({
+                    ...prev,
+                    priceIncludesTax: e.target.checked,
+                  }))
+                }
+              />
+            </label>
+          </div>
         </div>
-      </div>
-      <button className="btn primary" type="submit" disabled={loading}>
-        {loading ? "Saving..." : "Save & Continue"}
-      </button>
+        <button className="btn primary" type="submit" disabled={loading}>
+          {loading ? "Saving..." : "Save & Continue"}
+        </button>
         {status.message && (
           <p className={`status ${status.type}`}>{status.message}</p>
         )}
