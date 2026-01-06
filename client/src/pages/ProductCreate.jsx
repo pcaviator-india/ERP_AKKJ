@@ -498,6 +498,17 @@ export default function ProductCreate() {
     }
   };
 
+  const handleDiscard = () => {
+    if (saving || loadingProduct) {
+      return;
+    }
+    if (!isEdit && pendingTokenRef.current) {
+      localStorage.removeItem("akkj_pending_cf_token");
+      pendingTokenRef.current = null;
+    }
+    navigate("/products");
+  };
+
   const persistCustomValues = async (targetId) => {
     if (customDefs.length === 0) return;
     // If we have a product ID, save directly; otherwise stage into pending table
@@ -694,6 +705,14 @@ export default function ProductCreate() {
         <div className="form-actions inline-actions">
           <button className="btn primary" type="submit" form="productForm" disabled={saving || loadingProduct}>
             {saving ? t("productForm.saving") : isEdit ? t("productForm.update", "Update") : t("productForm.save")}
+          </button>
+          <button
+            className="btn ghost"
+            type="button"
+            disabled={saving || loadingProduct}
+            onClick={handleDiscard}
+          >
+            {t("productForm.discard", "Discard")}
           </button>
           <button
             className="btn ghost"

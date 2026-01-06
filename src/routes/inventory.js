@@ -2,6 +2,12 @@ const express = require("express");
 const router = express.Router();
 const { pool } = require("../db");
 
+function createError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
 // GET /api/inventory/levels
 // optional query: productId, warehouseId, includeZero=1
 router.get("/levels", async (req, res) => {
@@ -216,6 +222,264 @@ router.post("/levels/bulk-save", async (req, res) => {
     res.status(500).json({ error: "Failed to save inventory" });
   } finally {
     if (conn) conn.release();
+  }
+});
+
+router.post("/transfer", async (req, res) => {
+  const companyId = req.user.CompanyID;
+  const employeeId = req.user.EmployeeID;
+  const body = req.body || {};
+
+  const {
+    ProductID,
+    FromWarehouseID,
+    ToWarehouseID,
+    Quantity,
+    Reason,
+    ProductLotID,
+  } = body;
+
+  if (!ProductID || !FromWarehouseID || !ToWarehouseID || !Quantity) {
+    return res.status(400).json({
+      error: "ProductID, FromWarehouseID, ToWarehouseID and Quantity are required",
+    });
+  }
+
+  if (Number(FromWarehouseID) === Number(ToWarehouseID)) {
+    return res.status(400).json({ error: "Source and destination warehouses must differ" });
+  }
+
+  const transferQty = Number(Quantity);
+  if (!Number.isFinite(transferQty) || transferQty <= 0) {
+    return res.status(400).json({ error: "Quantity must be a positive number" });
+  }
+
+  let conn;
+
+  try {
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    const [[productRow]] = await conn.query(
+      `SELECT ProductID, ProductName
+       FROM Products
+       WHERE ProductID = ? AND CompanyID = ?`,
+      [ProductID, companyId]
+    );
+
+    if (!productRow) {
+      throw createError(404, "Product not found");
+    }
+
+    const [warehouseRows] = await conn.query(
+      `SELECT WarehouseID, WarehouseName
+       FROM Warehouses
+       WHERE CompanyID = ? AND WarehouseID IN (?, ?)` ,
+      [companyId, FromWarehouseID, ToWarehouseID]
+    );
+
+    if (warehouseRows.length < 2) {
+      throw createError(404, "One or more warehouses not found");
+    }
+
+    const fromWarehouse = warehouseRows.find((w) => Number(w.WarehouseID) === Number(FromWarehouseID));
+    const toWarehouse = warehouseRows.find((w) => Number(w.WarehouseID) === Number(ToWarehouseID));
+
+    if (!fromWarehouse || !toWarehouse) {
+      throw createError(404, "One or more warehouses not found");
+    }
+
+    const [[sourceLevel]] = await conn.query(
+      `SELECT
+         ProductInventoryLevelID,
+         StockQuantity,
+         ReservedQuantity
+       FROM ProductInventoryLevels
+       WHERE ProductID = ? AND WarehouseID = ? AND
+             ((ProductLotID IS NULL AND ? IS NULL) OR ProductLotID = ?)
+       FOR UPDATE`,
+      [ProductID, FromWarehouseID, ProductLotID || null, ProductLotID || null]
+    );
+
+    if (!sourceLevel) {
+      throw createError(400, "Source warehouse has no stock for this product");
+    }
+
+    const availableQty = Number(sourceLevel.StockQuantity || 0) - Number(sourceLevel.ReservedQuantity || 0);
+    if (availableQty < transferQty) {
+      throw createError(400, "Insufficient available stock at source warehouse");
+    }
+
+    const updatedSourceQty = Number(sourceLevel.StockQuantity || 0) - transferQty;
+
+    await conn.query(
+      `UPDATE ProductInventoryLevels
+       SET StockQuantity = ?, LastUpdatedAt = NOW()
+       WHERE ProductInventoryLevelID = ?`,
+      [updatedSourceQty, sourceLevel.ProductInventoryLevelID]
+    );
+
+    if (ProductLotID) {
+      const [[lotSource]] = await conn.query(
+        `SELECT Quantity
+         FROM ProductLotInventory
+         WHERE ProductLotID = ? AND WarehouseID = ?
+         FOR UPDATE`,
+        [ProductLotID, FromWarehouseID]
+      );
+
+      if (!lotSource || Number(lotSource.Quantity || 0) < transferQty) {
+        throw createError(400, "Insufficient lot quantity at source warehouse");
+      }
+
+      const nextLotQty = Number(lotSource.Quantity || 0) - transferQty;
+
+      await conn.query(
+        `UPDATE ProductLotInventory
+         SET Quantity = ?
+         WHERE ProductLotID = ? AND WarehouseID = ?`,
+        [nextLotQty, ProductLotID, FromWarehouseID]
+      );
+    }
+
+    const [[destLevel]] = await conn.query(
+      `SELECT
+         ProductInventoryLevelID,
+         StockQuantity
+       FROM ProductInventoryLevels
+       WHERE ProductID = ? AND WarehouseID = ? AND
+             ((ProductLotID IS NULL AND ? IS NULL) OR ProductLotID = ?)
+       FOR UPDATE`,
+      [ProductID, ToWarehouseID, ProductLotID || null, ProductLotID || null]
+    );
+
+    let destinationLevelId;
+    let updatedDestinationQty;
+
+    if (!destLevel) {
+      const [insertResult] = await conn.query(
+        `INSERT INTO ProductInventoryLevels
+          (ProductID, WarehouseID, StockQuantity, ReservedQuantity,
+           MinStockLevel, MaxStockLevel, LastUpdatedAt, ProductLotID)
+         VALUES (?, ?, ?, 0, NULL, NULL, NOW(), ?)` ,
+        [ProductID, ToWarehouseID, transferQty, ProductLotID || null]
+      );
+      destinationLevelId = insertResult.insertId;
+      updatedDestinationQty = transferQty;
+    } else {
+      updatedDestinationQty = Number(destLevel.StockQuantity || 0) + transferQty;
+      await conn.query(
+        `UPDATE ProductInventoryLevels
+         SET StockQuantity = ?, LastUpdatedAt = NOW()
+         WHERE ProductInventoryLevelID = ?`,
+        [updatedDestinationQty, destLevel.ProductInventoryLevelID]
+      );
+      destinationLevelId = destLevel.ProductInventoryLevelID;
+    }
+
+    if (ProductLotID) {
+      await conn.query(
+        `INSERT INTO ProductLotInventory (ProductLotID, WarehouseID, Quantity)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE Quantity = Quantity + VALUES(Quantity)` ,
+        [ProductLotID, ToWarehouseID, transferQty]
+      );
+    }
+
+    const defaultNote = `Transfer ${transferQty} ${productRow.ProductName || "units"} from ${fromWarehouse.WarehouseName} to ${toWarehouse.WarehouseName}`;
+    const transferNote = Reason ? `${defaultNote} - ${Reason}` : defaultNote;
+
+    await conn.query(
+      `INSERT INTO InventoryTransactions
+        (CompanyID, ProductID, WarehouseID,
+         TransactionType, QuantityChange,
+         TransactionDate, ReferenceDocumentType, ReferenceDocumentID,
+         ProductLotID, ProductSerialID,
+         Notes, EmployeeID)
+       VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?)` ,
+      [
+        companyId,
+        ProductID,
+        FromWarehouseID,
+        "TransferOut",
+        -transferQty,
+        "InventoryTransfer",
+        null,
+        ProductLotID || null,
+        null,
+        transferNote,
+        employeeId || null,
+      ]
+    );
+
+    await conn.query(
+      `INSERT INTO InventoryTransactions
+        (CompanyID, ProductID, WarehouseID,
+         TransactionType, QuantityChange,
+         TransactionDate, ReferenceDocumentType, ReferenceDocumentID,
+         ProductLotID, ProductSerialID,
+         Notes, EmployeeID)
+       VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?)` ,
+      [
+        companyId,
+        ProductID,
+        ToWarehouseID,
+        "TransferIn",
+        transferQty,
+        "InventoryTransfer",
+        null,
+        ProductLotID || null,
+        null,
+        transferNote,
+        employeeId || null,
+      ]
+    );
+
+    await conn.commit();
+
+    const [updatedLevels] = await conn.query(
+      `SELECT
+         pil.ProductInventoryLevelID,
+         pil.ProductID,
+         p.ProductName,
+         pil.WarehouseID,
+         w.WarehouseName,
+         pil.StockQuantity,
+         pil.ReservedQuantity,
+         (pil.StockQuantity - pil.ReservedQuantity) AS AvailableQuantity,
+         pil.ProductLotID
+       FROM ProductInventoryLevels pil
+       INNER JOIN Products p ON pil.ProductID = p.ProductID
+       INNER JOIN Warehouses w ON pil.WarehouseID = w.WarehouseID
+       WHERE pil.ProductID = ? AND pil.WarehouseID IN (?, ?) AND
+             ((pil.ProductLotID IS NULL AND ? IS NULL) OR pil.ProductLotID = ?)` ,
+      [ProductID, FromWarehouseID, ToWarehouseID, ProductLotID || null, ProductLotID || null]
+    );
+
+    res.status(201).json({
+      transfer: {
+        productId: Number(ProductID),
+        fromWarehouseId: Number(FromWarehouseID),
+        toWarehouseId: Number(ToWarehouseID),
+        quantity: transferQty,
+        productLotId: ProductLotID ? Number(ProductLotID) : null,
+      },
+      levels: updatedLevels,
+    });
+  } catch (error) {
+    if (conn) {
+      await conn.rollback();
+    }
+    if (error?.status) {
+      res.status(error.status).json({ error: error.message });
+    } else {
+      console.error("Error transferring inventory:", error);
+      res.status(500).json({ error: "Failed to transfer inventory" });
+    }
+  } finally {
+    if (conn) {
+      conn.release();
+    }
   }
 });
 

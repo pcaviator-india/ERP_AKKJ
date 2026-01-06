@@ -11,10 +11,11 @@
   },
   "dependencies": {
     "axios": "^1.13.2",
+    "phosphor-react": "^1.4.1",
+    "quill": "^2.0.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.6",
-    "quill": "^2.0.2",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
@@ -29,4 +30,3 @@
     "vite": "^7.2.4"
   }
 }
-

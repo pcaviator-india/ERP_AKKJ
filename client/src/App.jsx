@@ -15,6 +15,7 @@ import UnitsPage from "./pages/UnitsPage";
 import WarehousesPage from "./pages/WarehousesPage";
 import WarehouseAddStock from "./pages/WarehouseAddStock";
 import InventoryPage from "./pages/InventoryPage";
+import InventoryTransfer from "./pages/InventoryTransfer";
 import StockDetails from "./pages/StockDetails";
 import PriceListsPage from "./pages/PriceListsPage";
 import PromotionCreate from "./pages/PromotionCreate";
@@ -30,6 +31,7 @@ import Pos from "./pages/Pos";
 import CustomerScreen from "./pages/CustomerScreen";
 import ReceiptSettings from "./pages/ReceiptSettings";
 import AccessoriesSettings from "./pages/AccessoriesSettings";
+import ReportsPage from "./pages/ReportsPage";
 import PublicLayout from "./layouts/PublicLayout";
 import DashboardLayout from "./layouts/DashboardLayout";
 import PosLayout from "./layouts/PosLayout";
@@ -90,6 +92,10 @@ function App() {
                   />
                   <Route path="/inventory" element={<InventoryPage />} />
                   <Route
+                    path="/inventory/transfer"
+                    element={<InventoryTransfer />}
+                  />
+                  <Route
                     path="/inventory/:productId/:warehouseId/details"
                     element={<StockDetails />}
                   />
@@ -105,6 +111,7 @@ function App() {
                   <Route path="/promotions/new" element={<PromotionCreate />} />
                   <Route path="/promotions" element={<PromotionsPage />} />
                   <Route path="/tax-rates" element={<TaxRatesPage />} />
+                  <Route path="/reports" element={<ReportsPage />} />
                   <Route
                     path="/settings/receipts"
                     element={<ReceiptSettings />}

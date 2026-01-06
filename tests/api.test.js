@@ -1,3 +1,60 @@
+jest.mock("exceljs", () => {
+  class Worksheet {
+    constructor() {
+      this.columns = [];
+    }
+    addRow() {
+      return null;
+    }
+  }
+
+  return {
+    Workbook: class WorkbookMock {
+      constructor() {
+        this._worksheet = new Worksheet();
+        this.xlsx = {
+          writeBuffer: jest.fn(() => Promise.resolve(Buffer.from("fake-xlsx"))),
+        };
+      }
+      addWorksheet() {
+        return this._worksheet;
+      }
+    },
+  };
+});
+
+jest.mock(
+  "pdfkit",
+  () => {
+    const { Readable } = require("stream");
+    return class PDFDocumentMock extends Readable {
+      constructor() {
+        super();
+      }
+      pipe(destination) {
+        return Readable.prototype.pipe.call(this, destination);
+      }
+      fontSize() {
+        return this;
+      }
+      font() {
+        return this;
+      }
+      text() {
+        return this;
+      }
+      moveDown() {
+        return this;
+      }
+      end() {
+        this.push(Buffer.from("fake-pdf"));
+        this.push(null);
+      }
+    };
+  },
+  { virtual: true }
+);
+
 const request = require("supertest");
 const jwt = require("jsonwebtoken");
 const app = require("../src/server");
@@ -15,6 +72,17 @@ function authHeader(payload = {}) {
   );
 
   return `Bearer ${token}`;
+}
+
+function binaryParser(res, callback) {
+  res.setEncoding("binary");
+  let data = "";
+  res.on("data", (chunk) => {
+    data += chunk;
+  });
+  res.on("end", () => {
+    callback(null, Buffer.from(data, "binary"));
+  });
 }
 
 describe("Public endpoints", () => {
@@ -59,6 +127,36 @@ const protectedEndpoints = [
   { method: "post", path: "/api/sales/debit-note", payload: {} },
   { method: "post", path: "/api/sales/guia-despacho", payload: {} },
   { method: "get", path: "/api/warehouses" },
+  { method: "get", path: "/api/reports/sources" },
+  { method: "get", path: "/api/reports/templates" },
+  { method: "get", path: "/api/reports/recent" },
+  { method: "get", path: "/api/reports/schedules" },
+  {
+    method: "post",
+    path: "/api/reports/preview",
+    payload: { source: "sales_orders" },
+  },
+  {
+    method: "post",
+    path: "/api/reports/export",
+    payload: { source: "sales_orders", exportFormat: "csv" },
+  },
+  {
+    method: "post",
+    path: "/api/reports/schedules",
+    payload: { name: "Weekly summary" },
+  },
+  {
+    method: "put",
+    path: "/api/reports/schedules/sched-1",
+    payload: { name: "Weekly summary" },
+  },
+  {
+    method: "patch",
+    path: "/api/reports/schedules/sched-1",
+    payload: { enabled: false },
+  },
+  { method: "delete", path: "/api/reports/schedules/sched-1" },
   { method: "post", path: "/api/warehouses", payload: { WarehouseName: "W1" } },
   { method: "get", path: "/api/inventory/levels" },
   { method: "post", path: "/api/inventory/adjust", payload: { ProductID: 1, WarehouseID: 1, QuantityChange: 1 } },
@@ -129,9 +227,368 @@ describe("Sample authenticated flows", () => {
     );
   });
 
+  test("GET /api/reports/sources returns dataset catalog", async () => {
+    mockPool.query
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([
+        [
+          {
+            TABLE_NAME: "fact_sales_orders",
+            COLUMN_NAME: "order_date",
+            DATA_TYPE: "date",
+            COLUMN_TYPE: "date",
+            ORDINAL_POSITION: 1,
+          },
+          {
+            TABLE_NAME: "fact_sales_orders",
+            COLUMN_NAME: "gross_total",
+            DATA_TYPE: "decimal",
+            COLUMN_TYPE: "decimal(10,2)",
+            ORDINAL_POSITION: 2,
+          },
+          {
+            TABLE_NAME: "fact_inventory_balances",
+            COLUMN_NAME: "snapshot_date",
+            DATA_TYPE: "date",
+            COLUMN_TYPE: "date",
+            ORDINAL_POSITION: 1,
+          },
+          {
+            TABLE_NAME: "fact_payments",
+            COLUMN_NAME: "payment_date",
+            DATA_TYPE: "date",
+            COLUMN_TYPE: "date",
+            ORDINAL_POSITION: 1,
+          },
+        ],
+      ]);
+
+    const res = await request(app)
+      .get("/api/reports/sources")
+      .set("Authorization", authHeader({ Role: "CompanyAdmin" }));
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.sources)).toBe(true);
+    expect(res.body.sources.length).toBeGreaterThan(0);
+    expect(res.body.count).toBe(res.body.sources.length);
+    expect(res.body.sources[0]).toEqual(
+      expect.objectContaining({ id: expect.any(String), table: expect.any(String) })
+    );
+    expect(Array.isArray(res.body.sources[0].fields)).toBe(true);
+  });
+
+  test("GET /api/reports/templates returns catalog", async () => {
+    const templates = [
+      {
+        id: "daily-sales",
+        category: "sales",
+        title: "Daily sales performance",
+        source: "sales_orders",
+      },
+    ];
+    mockReportStore.getTemplates.mockResolvedValueOnce(templates);
+
+    const res = await request(app)
+      .get("/api/reports/templates")
+      .set("Authorization", authHeader({ Role: "CompanyAdmin" }));
+
+    expect(res.status).toBe(200);
+    expect(res.body.templates).toEqual(templates);
+    expect(res.body.count).toBe(templates.length);
+    expect(mockReportStore.getTemplates).toHaveBeenCalled();
+  });
+
+  test("GET /api/reports/recent returns recent runs", async () => {
+    const recentRuns = [
+      {
+        id: "run-1",
+        name: "Daily sales performance",
+        ranAt: "2025-12-30T10:00:00.000Z",
+        rows: 42,
+      },
+    ];
+    mockReportStore.getRecentRuns.mockResolvedValueOnce(recentRuns);
+
+    const res = await request(app)
+      .get("/api/reports/recent")
+      .set("Authorization", authHeader({ CompanyID: 5, Role: "CompanyAdmin" }));
+
+    expect(res.status).toBe(200);
+    expect(res.body.runs).toEqual(recentRuns);
+    expect(res.body.count).toBe(recentRuns.length);
+    expect(mockReportStore.getRecentRuns).toHaveBeenCalledWith(5);
+  });
+
+  test("GET /api/reports/schedules returns schedules", async () => {
+    const schedules = [
+      {
+        id: "sched-1",
+        name: "Daily email",
+        frequency: "daily",
+      },
+    ];
+    mockReportStore.getSchedules.mockResolvedValueOnce(schedules);
+
+    const res = await request(app)
+      .get("/api/reports/schedules")
+      .set("Authorization", authHeader({ CompanyID: 9, Role: "CompanyAdmin" }));
+
+    expect(res.status).toBe(200);
+    expect(res.body.schedules).toEqual(schedules);
+    expect(res.body.count).toBe(1);
+    expect(mockReportStore.getSchedules).toHaveBeenCalledWith(9);
+  });
+
+  test("POST /api/reports/schedules creates schedule", async () => {
+    const createdSchedule = {
+      id: "sched-1",
+      name: "Daily email",
+      description: "Daily sales report",
+      frequency: "daily",
+      delivery: "email",
+      recipients: ["ops@example.com"],
+      format: "csv",
+      enabled: true,
+    };
+    mockReportStore.createSchedule.mockResolvedValueOnce(createdSchedule);
+
+    const payload = {
+      name: "Daily email",
+      description: "Daily sales report",
+      frequency: "daily",
+      delivery: "email",
+      recipients: ["ops@example.com"],
+      templateId: "daily-sales",
+      source: "sales_orders",
+    };
+
+    const res = await request(app)
+      .post("/api/reports/schedules")
+      .set("Authorization", authHeader({ CompanyID: 11, Role: "CompanyAdmin" }))
+      .send(payload);
+
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual(createdSchedule);
+    expect(mockReportStore.createSchedule).toHaveBeenCalledWith(
+      11,
+      expect.objectContaining({
+        name: "Daily email",
+        delivery: "email",
+        format: "csv",
+        templateId: "daily-sales",
+      })
+    );
+  });
+
+  test("PUT /api/reports/schedules/:id updates schedule", async () => {
+    const updatedSchedule = {
+      id: "sched-1",
+      name: "Weekly digest",
+      frequency: "weekly",
+      delivery: "email",
+      recipients: ["ops@example.com"],
+      format: "csv",
+      enabled: true,
+    };
+    mockReportStore.updateSchedule.mockResolvedValueOnce(updatedSchedule);
+
+    const payload = {
+      name: "Weekly digest",
+      frequency: "weekly",
+      delivery: "email",
+      recipients: ["ops@example.com"],
+      templateId: "daily-sales",
+      source: "sales_orders",
+    };
+
+    const res = await request(app)
+      .put("/api/reports/schedules/sched-1")
+      .set("Authorization", authHeader({ CompanyID: 12, Role: "CompanyAdmin" }))
+      .send(payload);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(updatedSchedule);
+    expect(mockReportStore.updateSchedule).toHaveBeenCalledWith(
+      12,
+      "sched-1",
+      expect.objectContaining({ name: "Weekly digest", frequency: "weekly" })
+    );
+  });
+
+  test("PATCH /api/reports/schedules/:id toggles schedule", async () => {
+    const patchedSchedule = {
+      id: "sched-1",
+      name: "Daily email",
+      frequency: "daily",
+      delivery: "email",
+      recipients: ["ops@example.com"],
+      format: "csv",
+      enabled: false,
+    };
+    mockReportStore.patchSchedule.mockResolvedValueOnce(patchedSchedule);
+
+    const res = await request(app)
+      .patch("/api/reports/schedules/sched-1")
+      .set("Authorization", authHeader({ CompanyID: 13, Role: "CompanyAdmin" }))
+      .send({ enabled: false });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(patchedSchedule);
+    expect(mockReportStore.patchSchedule).toHaveBeenCalledWith(13, "sched-1", { enabled: false });
+  });
+
+  test("DELETE /api/reports/schedules/:id removes schedule", async () => {
+    mockReportStore.deleteSchedule.mockResolvedValueOnce(true);
+
+    const res = await request(app)
+      .delete("/api/reports/schedules/sched-1")
+      .set("Authorization", authHeader({ CompanyID: 14, Role: "CompanyAdmin" }));
+
+    expect(res.status).toBe(204);
+    expect(mockReportStore.deleteSchedule).toHaveBeenCalledWith(14, "sched-1");
+  });
+
+  test("POST /api/reports/preview returns preview rows", async () => {
+    const metadataRows = [
+      {
+        TABLE_NAME: "fact_sales_orders",
+        COLUMN_NAME: "order_date",
+        DATA_TYPE: "date",
+        COLUMN_TYPE: "date",
+        ORDINAL_POSITION: 1,
+      },
+      {
+        TABLE_NAME: "fact_sales_orders",
+        COLUMN_NAME: "gross_total",
+        DATA_TYPE: "decimal",
+        COLUMN_TYPE: "decimal(10,2)",
+        ORDINAL_POSITION: 2,
+      },
+    ];
+
+    const previewRows = [
+      { order_date: "2025-01-01", gross_total: 123.45 },
+      { order_date: "2025-01-02", gross_total: 90.12 },
+    ];
+
+    mockPool.query
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([metadataRows])
+      .mockResolvedValueOnce([previewRows]);
+
+    const payload = {
+      source: "sales_orders",
+      select: [
+        { field: "order_date", alias: "order_date" },
+        { field: "gross_total", agg: "SUM", alias: "gross_total" },
+      ],
+      groupBy: ["order_date"],
+      sort: [{ field: "order_date", direction: "asc" }],
+      limit: 1,
+      page: 0,
+    };
+
+    const res = await request(app)
+      .post("/api/reports/preview")
+      .set("Authorization", authHeader({ Role: "CompanyAdmin" }))
+      .send(payload);
+
+    expect(res.status).toBe(200);
+    expect(res.body.columns).toEqual([
+      expect.objectContaining({ id: "order_date" }),
+      expect.objectContaining({ id: "gross_total" }),
+    ]);
+    expect(res.body.rows).toEqual([
+      { order_date: "2025-01-01", gross_total: 123.45 },
+    ]);
+    expect(res.body.pagination).toMatchObject({
+      page: 0,
+      pageSize: 1,
+      hasNext: true,
+      hasPrev: false,
+    });
+
+    const previewCall = mockPool.query.mock.calls[2];
+    const sql = previewCall[0].replace(/\s+/g, " ");
+    expect(sql).toContain("FROM `fact_sales_orders`");
+    expect(sql).toContain("GROUP BY `order_date`");
+    expect(sql).toContain("ORDER BY `order_date` ASC");
+    expect(sql).toContain("LIMIT ?");
+    expect(previewCall[1]).toEqual([2]);
+  });
+
+  test("POST /api/reports/export returns PDF file", async () => {
+    const exportRows = [
+      { order_date: "2025-01-01", gross_total: 123.45 },
+      { order_date: "2025-01-02", gross_total: 90.12 },
+    ];
+
+    mockPool.query
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([exportRows]);
+
+    const res = await request(app)
+      .post("/api/reports/export")
+      .set("Authorization", authHeader({ Role: "CompanyAdmin" }))
+      .send({
+        source: "sales_orders",
+        select: [
+          { field: "order_date", alias: "order_date" },
+          { field: "gross_total", alias: "gross_total" },
+        ],
+        groupBy: ["order_date"],
+        exportFormat: "pdf",
+        limit: 10,
+      })
+      .buffer()
+      .parse(binaryParser);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toContain("application/pdf");
+    expect(res.headers["content-disposition"]).toContain(".pdf");
+    expect(Buffer.isBuffer(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThan(0);
+  });
+
+  test("POST /api/reports/export returns XLSX file", async () => {
+    const exportRows = [
+      { order_date: "2025-01-01", gross_total: 123.45 },
+      { order_date: "2025-01-02", gross_total: 90.12 },
+    ];
+
+    mockPool.query
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([exportRows]);
+
+    const res = await request(app)
+      .post("/api/reports/export")
+      .set("Authorization", authHeader({ Role: "CompanyAdmin" }))
+      .send({
+        source: "sales_orders",
+        select: [
+          { field: "order_date", alias: "order_date" },
+          { field: "gross_total", alias: "gross_total" },
+        ],
+        groupBy: ["order_date"],
+        exportFormat: "xlsx",
+        limit: 10,
+      })
+      .buffer()
+      .parse(binaryParser);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toContain(
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    expect(res.headers["content-disposition"]).toContain(".xlsx");
+    expect(Buffer.isBuffer(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThan(0);
+  });
+
   test("POST /api/payment-methods creates method when run by SuperAdmin", async () => {
     const methodPayload = { MethodName: "Cash" };
     mockPool.query
+      .mockResolvedValueOnce([[]])
       .mockResolvedValueOnce([{ insertId: 101 }])
       .mockResolvedValueOnce([
         [
@@ -154,7 +611,7 @@ describe("Sample authenticated flows", () => {
       MethodName: "Cash",
       IsActive: 1,
     });
-    expect(mockPool.query.mock.calls[0][1][0]).toBe("Cash");
+    expect(mockPool.query.mock.calls[1][1][0]).toBe("Cash");
   });
 
   test("POST /api/ar/invoices/:saleId/pay handles payment updates", async () => {
@@ -358,7 +815,7 @@ describe("Sample authenticated flows", () => {
     expect(mockPool.getConnection).toHaveBeenCalled();
     expect(mockConn.beginTransaction).toHaveBeenCalled();
     expect(mockConn.query.mock.calls[0][0]).toContain("INSERT INTO GoodsReceipts");
-    expect(mockConn.query.mock.calls[0][1][2]).toBe(payload.SupplierID);
+    expect(mockConn.query.mock.calls[0][1][3]).toBe(payload.SupplierID);
     expect(mockConn.commit).toHaveBeenCalled();
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({
@@ -566,6 +1023,7 @@ describe("Sample authenticated flows", () => {
     };
 
     mockPool.query
+      .mockResolvedValueOnce([[]])
       .mockResolvedValueOnce([{ insertId: 77 }])
       .mockResolvedValueOnce([[warehouseRow]]);
 
@@ -574,8 +1032,8 @@ describe("Sample authenticated flows", () => {
       .set("Authorization", authHeader({ CompanyID: 2 }))
       .send({ WarehouseName: "Main" });
 
-    expect(mockPool.query).toHaveBeenCalledTimes(2);
-    expect(mockPool.query.mock.calls[0][0]).toContain("INSERT INTO Warehouses");
+    expect(mockPool.query).toHaveBeenCalledTimes(3);
+    expect(mockPool.query.mock.calls[1][0]).toContain("INSERT INTO Warehouses");
     expect(res.status).toBe(201);
     expect(res.body).toEqual(warehouseRow);
   });

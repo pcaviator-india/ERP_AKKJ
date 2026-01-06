@@ -18,9 +18,24 @@ jest.mock("../src/db", () => ({
   pool: mockPool,
 }));
 
+const mockReportStore = {
+  getTemplates: jest.fn(() => Promise.resolve([])),
+  getRecentRuns: jest.fn(() => Promise.resolve([])),
+  setRecentRuns: jest.fn(() => Promise.resolve([])),
+  getSchedules: jest.fn(() => Promise.resolve([])),
+  createSchedule: jest.fn(() => Promise.resolve(null)),
+  updateSchedule: jest.fn(() => Promise.resolve(null)),
+  patchSchedule: jest.fn(() => Promise.resolve(null)),
+  deleteSchedule: jest.fn(() => Promise.resolve(true)),
+};
+
+jest.mock("../src/services/reportStore", () => mockReportStore);
+
 const mockedDb = require("../src/db");
+const mockedReportStore = require("../src/services/reportStore");
 global.mockPool = mockedDb.pool;
 global.mockConnection = mockConnection;
+global.mockReportStore = mockedReportStore;
 
 beforeEach(() => {
   mockPool.query.mockClear();
@@ -30,6 +45,11 @@ beforeEach(() => {
   mockConnection.commit.mockClear();
   mockConnection.rollback.mockClear();
   mockConnection.release.mockClear();
+  Object.values(mockReportStore).forEach((fn) => {
+    if (typeof fn === "function" && "mock" in fn) {
+      fn.mockClear();
+    }
+  });
 });
 
 afterAll(() => {

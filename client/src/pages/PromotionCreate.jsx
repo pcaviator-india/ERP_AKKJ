@@ -54,10 +54,16 @@ const hydrateDraftFromPromo = (promo) => {
     code: promo.code || promo.Code || "",
     description: promo.description || promo.Description || "",
     unitPrice: promo.unitPrice ?? promo.UnitPrice ?? "",
-    type: promo.unitPrice || promo.UnitPrice ? "unit" : promo.type || promo.Type || "percent",
+    type:
+      promo.unitPrice || promo.UnitPrice
+        ? "unit"
+        : promo.type || promo.Type || "percent",
     // Normalize percent values: treat fractional values (0 < v < 1) as fractions and scale to percent
     value: (() => {
-      const raw = promo.unitPrice || promo.UnitPrice ? "" : Number(promo.value ?? promo.Value ?? 0) || 0;
+      const raw =
+        promo.unitPrice || promo.UnitPrice
+          ? ""
+          : Number(promo.value ?? promo.Value ?? 0) || 0;
       return raw > 0 && raw < 1 ? raw * 100 : raw;
     })(),
     enabled: promo.enabled ?? promo.Enabled ?? true,
@@ -76,13 +82,17 @@ const hydrateDraftFromPromo = (promo) => {
       start: promo.startAt || promo.schedule?.start || null,
       end: promo.endAt || promo.schedule?.end || null,
       days: scopes.days || promo.schedule?.days || [],
-      timezone: promo.timezone || promo.schedule?.timezone || defaultDraft.schedule.timezone,
+      timezone:
+        promo.timezone ||
+        promo.schedule?.timezone ||
+        defaultDraft.schedule.timezone,
     },
     limits: {
       ...defaultDraft.limits,
       perOrder: limits.perOrder ?? promo.perOrderLimit ?? null,
       perCustomer: limits.perCustomer ?? promo.perCustomerLimit ?? null,
-      totalRedemptions: limits.totalRedemptions ?? promo.totalRedemptions ?? null,
+      totalRedemptions:
+        limits.totalRedemptions ?? promo.totalRedemptions ?? null,
       minQuantity: limits.minQuantity ?? promo.minQuantity ?? null,
       priority: promo.priority ?? limits.priority ?? 100,
       stackable: promo.stackable ?? limits.stackable ?? true,
@@ -125,7 +135,10 @@ export default function PromotionCreate() {
   const [availableProducts, setAvailableProducts] = useState([]);
   const [categoryProducts, setCategoryProducts] = useState({});
   const [availableCustomers, setAvailableCustomers] = useState([]);
-  const availableDays = useMemo(() => ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], []);
+  const availableDays = useMemo(
+    () => ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    []
+  );
   const [availableBrands, setAvailableBrands] = useState([]);
   const [availableEmployees, setAvailableEmployees] = useState([]);
   const [availableCustomFields, setAvailableCustomFields] = useState([]);
@@ -135,10 +148,8 @@ export default function PromotionCreate() {
       "Percentage discount applied to eligible items. Enter a percent value (e.g. 10 for 10%).",
     amount:
       "Fixed amount discount applied to eligible items (currency). Enter the amount to subtract.",
-    unit:
-      "Set a target unit price for eligible items. Use the Unit price field to set the new per-unit price.",
-    bogo:
-      "Buy X Get Y: set 'Value' = Y (free units) and 'Min quantity (trigger)' (right column) = X.",
+    unit: "Set a target unit price for eligible items. Use the Unit price field to set the new per-unit price.",
+    bogo: "Buy X Get Y: set 'Value' = Y (free units) and 'Min quantity (trigger)' (right column) = X.",
     bundle:
       "Bundle price: configure the component products in Scope & eligibility so the bundle applies.",
     shipping: "Free shipping for eligible orders. Applies at checkout.",
@@ -181,7 +192,15 @@ export default function PromotionCreate() {
         const res = await api.get("/api/employees");
         const list = Array.isArray(res.data) ? res.data : res.data?.items || [];
         const names = list
-          .map((e) => e.FirstName || e.firstName || e.Name || e.name || e.Email || e.email)
+          .map(
+            (e) =>
+              e.FirstName ||
+              e.firstName ||
+              e.Name ||
+              e.name ||
+              e.Email ||
+              e.email
+          )
           .filter(Boolean)
           .map((v) => String(v));
         setAvailableEmployees(names);
@@ -207,12 +226,22 @@ export default function PromotionCreate() {
     };
     const fetchCustomers = async () => {
       try {
-        const res = await api.get("/api/customers", { params: { ts: Date.now() } });
+        const res = await api.get("/api/customers", {
+          params: { ts: Date.now() },
+        });
         const list = Array.isArray(res.data)
           ? res.data
           : res.data?.items || res.data?.customers || res.data?.data || [];
         const names = list
-          .map((c) => c.CustomerName || c.Name || c.name || c.Email || c.email || c.CustomerID)
+          .map(
+            (c) =>
+              c.CustomerName ||
+              c.Name ||
+              c.name ||
+              c.Email ||
+              c.email ||
+              c.CustomerID
+          )
           .filter(Boolean)
           .map((v) => String(v));
         setAvailableCustomers(names);
@@ -223,18 +252,26 @@ export default function PromotionCreate() {
     };
     const fetchProducts = async () => {
       try {
-        const res = await api.get("/api/products", { params: { ts: Date.now() } });
+        const res = await api.get("/api/products", {
+          params: { ts: Date.now() },
+        });
         const list = Array.isArray(res.data)
           ? res.data
           : res.data?.items || res.data?.products || res.data?.data || [];
         const names = [];
         const catMap = {};
         list.forEach((p) => {
-          const label = p.ProductName || p.Name || p.name || p.SKU || p.Sku || p.ProductID;
+          const label =
+            p.ProductName || p.Name || p.name || p.SKU || p.Sku || p.ProductID;
           if (!label) return;
           const strLabel = String(label);
           names.push(strLabel);
-          const cat = p.CategoryName || p.categoryName || p.Category || p.CategoryID || "Uncategorized";
+          const cat =
+            p.CategoryName ||
+            p.categoryName ||
+            p.Category ||
+            p.CategoryID ||
+            "Uncategorized";
           if (!catMap[cat]) catMap[cat] = [];
           catMap[cat].push(strLabel);
         });
@@ -269,7 +306,9 @@ export default function PromotionCreate() {
         try {
           const { data } = await api.get("/api/promotions");
           const list = Array.isArray(data) ? data : [];
-          const found = list.find((p) => String(p.id || p.PromotionID) === String(promoId));
+          const found = list.find(
+            (p) => String(p.id || p.PromotionID) === String(promoId)
+          );
           if (found) {
             setEditingId(found.id || found.PromotionID || null);
             setDraft(hydrateDraftFromPromo(found));
@@ -294,7 +333,9 @@ export default function PromotionCreate() {
             .map((v) => v.trim())
             .filter(Boolean);
       const exists = list.includes(value);
-      const nextList = exists ? list.filter((v) => v !== value) : [...list, value];
+      const nextList = exists
+        ? list.filter((v) => v !== value)
+        : [...list, value];
 
       const nextScope = { ...prev.scope, [field]: nextList };
 
@@ -308,7 +349,9 @@ export default function PromotionCreate() {
               .split(",")
               .map((v) => v.trim())
               .filter(Boolean);
-        const merged = Array.from(new Set([...currentProducts, ...productsFromCategory]));
+        const merged = Array.from(
+          new Set([...currentProducts, ...productsFromCategory])
+        );
         nextScope.products = merged;
       }
 
@@ -340,7 +383,10 @@ export default function PromotionCreate() {
 
   const handleSave = async () => {
     if (!canSave) {
-      setStatus({ type: "error", message: t("promotions.create.validationRequired") });
+      setStatus({
+        type: "error",
+        message: t("promotions.create.validationRequired"),
+      });
       return;
     }
     setSaving(true);
@@ -349,7 +395,9 @@ export default function PromotionCreate() {
       const isShippingPromo = draft.type === "shipping";
       const typeToSend = draft.type === "unit" ? "amount" : draft.type;
       const unitPrice =
-        draft.type === "unit" && draft.unitPrice !== "" ? Number(draft.unitPrice) : null;
+        draft.type === "unit" && draft.unitPrice !== ""
+          ? Number(draft.unitPrice)
+          : null;
       // Normalize numeric value: if user entered a fraction (0 < v < 1) treat as fraction and scale to percent
       const rawVal =
         draft.type === "unit" || isShippingPromo
@@ -455,9 +503,7 @@ export default function PromotionCreate() {
             onKeyDown={(e) => {
               if (e.key === "ArrowDown") {
                 e.preventDefault();
-                setHighlight((prev) =>
-                  Math.min(filtered.length - 1, prev + 1)
-                );
+                setHighlight((prev) => Math.min(filtered.length - 1, prev + 1));
               } else if (e.key === "ArrowUp") {
                 e.preventDefault();
                 setHighlight((prev) => Math.max(-1, prev - 1));
@@ -513,7 +559,10 @@ export default function PromotionCreate() {
                   padding: "10px 12px",
                   cursor: "pointer",
                   borderBottom: "1px solid #eef1ff",
-                  background: clampedHighlight >= 0 && filtered[clampedHighlight] === opt ? "#eef2ff" : "transparent",
+                  background:
+                    clampedHighlight >= 0 && filtered[clampedHighlight] === opt
+                      ? "#eef2ff"
+                      : "transparent",
                 }}
                 onMouseDown={(e) => {
                   e.preventDefault();
@@ -611,21 +660,30 @@ export default function PromotionCreate() {
       <header className="list-header">
         <div>
           <h2>{t("promotions.create.title")}</h2>
-          <p className="muted">
-            {t("promotions.create.subtitle")}
-          </p>
+          <p className="muted">{t("promotions.create.subtitle")}</p>
         </div>
         <div className="list-actions">
-          <button className="btn ghost" type="button" onClick={() => navigate(-1)}>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => navigate(-1)}
+          >
             {t("common.cancel")}
           </button>
-          <button className="btn primary" type="button" onClick={handleSave} disabled={!canSave || saving}>
+          <button
+            className="btn primary"
+            type="button"
+            onClick={handleSave}
+            disabled={!canSave || saving}
+          >
             {t("promotions.create.save")}
           </button>
         </div>
       </header>
 
-      {status.message && <p className={`status ${status.type}`}>{status.message}</p>}
+      {status.message && (
+        <p className={`status ${status.type}`}>{status.message}</p>
+      )}
 
       <div className="grid two-col" style={{ gap: 16 }}>
         <div className="card">
@@ -634,7 +692,9 @@ export default function PromotionCreate() {
               {t("promotions.create.name")}
               <input
                 value={draft.name}
-                onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))}
+                onChange={(e) =>
+                  setDraft((prev) => ({ ...prev, name: e.target.value }))
+                }
                 placeholder={t("promotions.create.namePlaceholder")}
               />
             </label>
@@ -642,7 +702,9 @@ export default function PromotionCreate() {
               {t("promotions.create.code")}
               <input
                 value={draft.code}
-                onChange={(e) => setDraft((prev) => ({ ...prev, code: e.target.value }))}
+                onChange={(e) =>
+                  setDraft((prev) => ({ ...prev, code: e.target.value }))
+                }
                 placeholder="HOLIDAY10"
               />
             </label>
@@ -652,7 +714,9 @@ export default function PromotionCreate() {
             <textarea
               rows={2}
               value={draft.description}
-              onChange={(e) => setDraft((prev) => ({ ...prev, description: e.target.value }))}
+              onChange={(e) =>
+                setDraft((prev) => ({ ...prev, description: e.target.value }))
+              }
               placeholder={t("promotions.create.descriptionPlaceholder")}
             />
           </label>
@@ -676,7 +740,9 @@ export default function PromotionCreate() {
                 <input
                   type="number"
                   value={draft.unitPrice}
-                  onChange={(e) => setDraft((prev) => ({ ...prev, unitPrice: e.target.value }))}
+                  onChange={(e) =>
+                    setDraft((prev) => ({ ...prev, unitPrice: e.target.value }))
+                  }
                   placeholder="e.g. 500"
                   min="0"
                   step="0.01"
@@ -689,7 +755,9 @@ export default function PromotionCreate() {
                 <input
                   type="number"
                   value={draft.value}
-                  onChange={(e) => setDraft((prev) => ({ ...prev, value: e.target.value }))}
+                  onChange={(e) =>
+                    setDraft((prev) => ({ ...prev, value: e.target.value }))
+                  }
                   placeholder="10"
                   min="0"
                   step="0.01"
@@ -698,14 +766,18 @@ export default function PromotionCreate() {
             ) : null}
             {draft.type === "shipping" ? (
               <div style={{ paddingTop: 24 }}>
-                <p className="muted small">Shipping charges will be zero when this promo applies.</p>
+                <p className="muted small">
+                  Shipping charges will be zero when this promo applies.
+                </p>
               </div>
             ) : null}
             <label className="checkbox" style={{ marginTop: 22 }}>
               <input
                 type="checkbox"
                 checked={draft.enabled}
-                onChange={(e) => setDraft((prev) => ({ ...prev, enabled: e.target.checked }))}
+                onChange={(e) =>
+                  setDraft((prev) => ({ ...prev, enabled: e.target.checked }))
+                }
               />
               <span>{t("promotions.create.enableOnSave")}</span>
             </label>
@@ -898,7 +970,10 @@ export default function PromotionCreate() {
                 onChange={(e) =>
                   setDraft((prev) => ({
                     ...prev,
-                    limits: { ...prev.limits, totalRedemptions: e.target.value },
+                    limits: {
+                      ...prev.limits,
+                      totalRedemptions: e.target.value,
+                    },
                   }))
                 }
                 placeholder="e.g. 500"
@@ -928,7 +1003,10 @@ export default function PromotionCreate() {
                 onChange={(e) =>
                   setDraft((prev) => ({
                     ...prev,
-                    limits: { ...prev.limits, priority: Number(e.target.value || 0) },
+                    limits: {
+                      ...prev.limits,
+                      priority: Number(e.target.value || 0),
+                    },
                   }))
                 }
               />
@@ -950,11 +1028,23 @@ export default function PromotionCreate() {
         </div>
       </div>
 
-      <div className="form-actions" style={{ justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-        <button className="btn ghost" type="button" onClick={() => navigate(-1)}>
+      <div
+        className="form-actions"
+        style={{ justifyContent: "flex-end", gap: 8, marginTop: 12 }}
+      >
+        <button
+          className="btn ghost"
+          type="button"
+          onClick={() => navigate(-1)}
+        >
           {t("common.cancel")}
         </button>
-        <button className="btn primary" type="button" onClick={handleSave} disabled={!canSave || saving}>
+        <button
+          className="btn primary"
+          type="button"
+          onClick={handleSave}
+          disabled={!canSave || saving}
+        >
           {t("promotions.create.save")}
         </button>
       </div>
@@ -971,54 +1061,54 @@ export default function PromotionCreate() {
             <h3>{t("promotions.create.pickItems")}</h3>
             <p className="muted small">{t("promotions.create.pickHint")}</p>
             <div className="modal-body">
-            {(categoryModal && (
-              <CheckboxList
-                title={t("promotions.create.categories")}
-                options={availableCategories}
-                selected={selectedCategories}
-                onToggle={(v) => toggleSelection("categories", v)}
-              />
-            )) ||
-              (productModal && (
+              {(categoryModal && (
                 <CheckboxList
-                  title={t("promotions.create.products")}
-                  options={availableProducts}
-                  selected={selectedProducts}
-                  onToggle={(v) => toggleSelection("products", v)}
+                  title={t("promotions.create.categories")}
+                  options={availableCategories}
+                  selected={selectedCategories}
+                  onToggle={(v) => toggleSelection("categories", v)}
                 />
               )) ||
-              (brandModal && (
-                <CheckboxList
-                  title={t("promotions.create.brands")}
-                  options={availableBrands}
-                  selected={selectedBrands}
-                  onToggle={(v) => toggleSelection("brands", v)}
-                />
-              )) ||
-              (groupModal && (
-                <CheckboxList
-                  title={t("promotions.create.customers")}
-                  options={availableCustomers}
-                  selected={selectedGroups}
-                  onToggle={(v) => toggleSelection("customers", v)}
-                />
-              )) ||
-              (employeeModal && (
-                <CheckboxList
-                  title={t("promotions.create.employees")}
-                  options={availableEmployees}
-                  selected={selectedEmployees}
-                  onToggle={(v) => toggleSelection("employees", v)}
-                />
-              )) ||
-              (customFieldModal && (
-                <CheckboxList
-                  title={t("promotions.create.customFields")}
-                  options={availableCustomFields}
-                  selected={selectedCustomFields}
-                  onToggle={(v) => toggleSelection("customFields", v)}
-                />
-              )) ||
+                (productModal && (
+                  <CheckboxList
+                    title={t("promotions.create.products")}
+                    options={availableProducts}
+                    selected={selectedProducts}
+                    onToggle={(v) => toggleSelection("products", v)}
+                  />
+                )) ||
+                (brandModal && (
+                  <CheckboxList
+                    title={t("promotions.create.brands")}
+                    options={availableBrands}
+                    selected={selectedBrands}
+                    onToggle={(v) => toggleSelection("brands", v)}
+                  />
+                )) ||
+                (groupModal && (
+                  <CheckboxList
+                    title={t("promotions.create.customers")}
+                    options={availableCustomers}
+                    selected={selectedGroups}
+                    onToggle={(v) => toggleSelection("customers", v)}
+                  />
+                )) ||
+                (employeeModal && (
+                  <CheckboxList
+                    title={t("promotions.create.employees")}
+                    options={availableEmployees}
+                    selected={selectedEmployees}
+                    onToggle={(v) => toggleSelection("employees", v)}
+                  />
+                )) ||
+                (customFieldModal && (
+                  <CheckboxList
+                    title={t("promotions.create.customFields")}
+                    options={availableCustomFields}
+                    selected={selectedCustomFields}
+                    onToggle={(v) => toggleSelection("customFields", v)}
+                  />
+                )) ||
                 (daysModal && (
                   <CheckboxList
                     title={t("promotions.create.daysOfWeek")}
@@ -1029,7 +1119,10 @@ export default function PromotionCreate() {
                   />
                 ))}
             </div>
-            <div className="form-actions" style={{ justifyContent: "flex-end", gap: 8 }}>
+            <div
+              className="form-actions"
+              style={{ justifyContent: "flex-end", gap: 8 }}
+            >
               <button
                 className="btn ghost"
                 type="button"
@@ -1060,7 +1153,13 @@ function CheckboxList({ title, options, selected, onToggle, displayFn }) {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search..."
-        style={{ width: "100%", margin: "8px 0", padding: "0.5rem", borderRadius: "8px", border: "1px solid #d8deff" }}
+        style={{
+          width: "100%",
+          margin: "8px 0",
+          padding: "0.5rem",
+          borderRadius: "8px",
+          border: "1px solid #d8deff",
+        }}
       />
       <div
         style={{

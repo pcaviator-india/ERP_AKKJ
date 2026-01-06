@@ -63,6 +63,15 @@ const defaultAccessories = {
   qzSignatureAlgorithm: envQzAlgo || "SHA512",
 };
 
+const defaultFeatures = {
+  reports: {
+    enabled: true,
+    apiEnabled: true,
+    previewEnabled: true,
+    schedulesEnabled: true,
+  },
+};
+
 const isPlainObject = (value) =>
   value != null && typeof value === "object" && !Array.isArray(value);
 
@@ -128,7 +137,11 @@ const buildScopeKey = (companyId, userId) => {
 // Merge company-level config first, then user-level overrides
 const mergeScopedConfig = (companyConfig, userConfig) =>
   deepMerge(
-    { receipts: defaultReceipts, accessories: defaultAccessories },
+    {
+      receipts: defaultReceipts,
+      accessories: defaultAccessories,
+      features: defaultFeatures,
+    },
     deepMerge(companyConfig, userConfig)
   );
 
@@ -170,6 +183,9 @@ async function updateConfig(companyId, userId, updates) {
       defaultAccessories,
       updates.accessories
     );
+  }
+  if (updates && updates.features) {
+    withDefaults.features = deepMerge(defaultFeatures, updates.features);
   }
   const store = await readStore();
   const companyKey = buildScopeKey(companyId, null);

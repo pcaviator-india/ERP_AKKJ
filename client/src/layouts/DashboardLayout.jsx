@@ -8,120 +8,154 @@ import {
 } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
+import {
+  Buildings,
+  ChartLine,
+  Clipboard,
+  ClipboardText,
+  Coins,
+  Desktop,
+  Gear,
+  Gift,
+  Globe,
+  Handshake,
+  House,
+  Lock,
+  Package,
+  Percent,
+  Plugs,
+  PlusCircle,
+  Scroll,
+  ShoppingBag,
+  SignOut,
+  SquaresFour,
+  TagSimple,
+  Truck,
+  UsersThree,
+  Factory,
+  Scales,
+  SlidersHorizontal,
+} from "phosphor-react";
+
+const navIconSize = 20;
+
+const renderIcon = (IconComp) =>
+  IconComp ? <IconComp size={navIconSize} weight="bold" /> : null;
 
 const navItems = [
-  { labelKey: "nav.dashboard", path: "/dashboard", icon: "\u{1F3E0}" },
+  { labelKey: "nav.dashboard", path: "/dashboard", icon: House },
+  { labelKey: "nav.reports", path: "/reports", icon: ChartLine },
   {
     labelKey: "nav.launchPos",
     path: "/pos",
-    icon: "\u{1F4B3}",
+    icon: Desktop,
     perm: "pos.use",
   },
   {
     labelKey: "nav.company",
     path: "/company/setup",
-    icon: "\u{1F3E2}",
+    icon: Buildings,
     perm: "config.manage",
   },
   {
     labelKey: "nav.taxRates",
     path: "/tax-rates",
-    icon: "\u{0025}",
+    icon: Percent,
     perm: "config.manage",
   },
   {
     labelKey: "nav.employees",
     path: "/employees/onboarding",
-    icon: "\u{1F465}",
+    icon: UsersThree,
     perm: "employees.manage",
   },
   {
     labelKey: "nav.customers",
     path: "/customers",
-    icon: "\u{1F91D}",
+    icon: Handshake,
     perm: "customers.manage",
   }, // handshake to distinguish from employees
   {
     labelKey: "nav.suppliers",
     path: "/suppliers",
-    icon: "\u{1F4E6}",
+    icon: Truck,
     perm: "inventory.view",
   },
   {
     labelKey: "nav.roles",
     path: "/roles",
-    icon: "\u{1F510}",
+    icon: Lock,
     perm: "roles.manage",
   },
   {
     labelKey: "nav.promotions",
     path: "/promotions",
-    icon: "\u{1F381}",
+    icon: Gift,
     perm: "config.manage",
   },
   {
     labelKey: "nav.products",
-    icon: "\u{1F6CD}",
+    icon: ShoppingBag,
     perm: "products.manage",
     children: [
       {
         labelKey: "nav.products",
         path: "/products",
-        icon: "\u{1F4E6}",
+        icon: Package,
         perm: "products.manage",
       },
       {
         labelKey: "nav.addProduct",
         path: "/products/new",
-        icon: "\u2795",
+        icon: PlusCircle,
         perm: "products.manage",
       },
       {
         labelKey: "nav.customFields",
         path: "/products/custom-fields",
-        icon: "\u2699",
+        icon: SlidersHorizontal,
         perm: "products.manage",
       },
       {
         labelKey: "nav.brands",
         path: "/brands",
-        icon: "\u{1F3F7}",
+        icon: TagSimple,
         perm: "products.manage",
       },
       {
         labelKey: "nav.categories",
         path: "/categories",
-        icon: "\u{1F4C2}",
+        icon: SquaresFour,
         perm: "products.manage",
       },
       {
         labelKey: "nav.units",
         path: "/units",
-        icon: "\u2696",
+        icon: Scales,
         perm: "products.manage",
       },
       {
         labelKey: "nav.inventory",
         path: "/inventory",
-        icon: "\u{1F4CA}",
+        icon: ChartLine,
         perm: "inventory.view",
       },
       {
         labelKey: "nav.purchaseOrders",
         path: "/purchase-orders",
-        icon: "\u{1F6D2}",
+        icon: ClipboardText,
         perm: "inventory.view",
       },
       {
         labelKey: "nav.directPurchases",
         path: "/direct-purchases",
-        icon: "\u{1F6D2}",
+        icon: Clipboard,
         perm: "inventory.view",
       },
       {
         labelKey: "nav.priceLists",
         path: "/price-lists",
-        icon: "\u{1F3F7}",
+        icon: Coins,
         perm: "priceLists.manage",
       },
     ],
@@ -129,24 +163,24 @@ const navItems = [
   {
     labelKey: "nav.manageWarehouses",
     path: "/warehouses",
-    icon: "\u{1F4C1}",
+    icon: Factory,
     perm: "warehouses.manage",
   },
   {
     labelKey: "nav.settings",
-    icon: "\u2699",
+    icon: Gear,
     perm: "config.manage",
     children: [
       {
         labelKey: "nav.receipts",
         path: "/settings/receipts",
-        icon: "\u{1F4C4}",
+        icon: Scroll,
         perm: "config.manage",
       },
       {
         labelKey: "nav.accessories",
         path: "/settings/accessories",
-        icon: "\u{1F5A8}",
+        icon: Plugs,
         perm: "config.manage",
       },
     ],
@@ -255,9 +289,15 @@ export default function DashboardLayout() {
                 className={({ isActive }) =>
                   `sidebar-link ${isActive ? "active" : ""}`
                 }
+                aria-label={t(item.labelKey)}
               >
-                <span className="sidebar-icon">{item.icon || "?"}</span>
+                <span className="sidebar-icon" aria-hidden="true">
+                  {renderIcon(item.icon)}
+                </span>
                 <span className="sidebar-label">{t(item.labelKey)}</span>
+                {collapsed && (
+                  <span className="sidebar-tooltip">{t(item.labelKey)}</span>
+                )}
               </NavLink>
             )
           )}
@@ -266,20 +306,7 @@ export default function DashboardLayout() {
           {!collapsed && <p>{user?.Email}</p>}
           <button className="btn ghost" type="button" onClick={handleLogout}>
             <span className="sidebar-icon logout-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" role="presentation" focusable="false">
-                <path
-                  d="M10.5 4.5a.75.75 0 0 0-.75-.75h-4a2 2 0 0 0-2 2v12.5a2 2 0 0 0 2 2h4a.75.75 0 0 0 .75-.75V17a.75.75 0 1 0-1.5 0v2H6a.5.5 0 0 1-.5-.5V5.75A.5.5 0 0 1 6 5.25h3v2a.75.75 0 0 0 1.5 0z"
-                  fill="currentColor"
-                />
-                <path
-                  d="M14.53 8.47a.75.75 0 0 0-1.06 1.06L15.94 12l-2.47 2.47a.75.75 0 1 0 1.06 1.06l3-3a.75.75 0 0 0 0-1.06z"
-                  fill="currentColor"
-                />
-                <path
-                  d="M9.25 12a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5H10a.75.75 0 0 1-.75-.75"
-                  fill="currentColor"
-                />
-              </svg>
+              {renderIcon(SignOut)}
             </span>
             <span className="sidebar-label">Logout</span>
           </button>
@@ -300,12 +327,7 @@ export default function DashboardLayout() {
               style={{ display: "flex", alignItems: "center", gap: 8 }}
             >
               <span className="sidebar-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" role="presentation" focusable="false">
-                  <path
-                    d="M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19zm7.7 8.6h-3.4a15 15 0 0 0-1.2-4.7 7.6 7.6 0 0 1 4.6 4.7zm-5.1 0h-5.2c.2-1.6.6-3.1 1.1-4.4.4-1 .9-1.6 1.5-1.6s1.1.6 1.5 1.6c.5 1.3.9 2.8 1.1 4.4zm-8.3 0H2.9a7.6 7.6 0 0 1 4.6-4.7c-.5 1.4-.9 3-1.2 4.7zm0 1.8c.2 1.7.6 3.2 1.2 4.7a7.6 7.6 0 0 1-4.6-4.7h3.4zm3.1 0h5.2c-.2 1.6-.6 3.1-1.1 4.4-.4 1-.9 1.6-1.5 1.6s-1.1-.6-1.5-1.6c-.5-1.3-.9-2.8-1.1-4.4zm6.6 0h3.4a7.6 7.6 0 0 1-4.6 4.7c.6-1.5 1-3 1.2-4.7z"
-                    fill="currentColor"
-                  />
-                </svg>
+                {renderIcon(Globe)}
               </span>
               <select
                 className="lang-switch"
@@ -351,8 +373,11 @@ function SidebarGroup({
         type="button"
         className="sidebar-group-label-row"
         onClick={onToggle}
+        aria-label={label}
       >
-        <span className="sidebar-icon">{icon || "?"}</span>
+        <span className="sidebar-icon" aria-hidden="true">
+          {renderIcon(icon)}
+        </span>
         {!collapsed && <span className="sidebar-group-label">{label}</span>}
         {!collapsed && (
           <span className="sidebar-group-caret">{expanded ? "▾" : "▸"}</span>
@@ -360,6 +385,11 @@ function SidebarGroup({
       </button>
       {(expanded || collapsed) && (
         <div className="sidebar-subnav">
+          {collapsed && (
+            <div className="sidebar-subnav-heading" aria-hidden="true">
+              {label}
+            </div>
+          )}
           {childrenItems.map((child) => (
             <NavLink
               key={child.path}
@@ -369,7 +399,9 @@ function SidebarGroup({
                 `sidebar-link ${isActive ? "active" : ""}`
               }
             >
-              <span className="sidebar-icon">{child.icon || "?"}</span>
+              <span className="sidebar-icon" aria-hidden="true">
+                {renderIcon(child.icon)}
+              </span>
               <span className="sidebar-label">
                 {child.labelKey ? t(child.labelKey) : child.label}
               </span>

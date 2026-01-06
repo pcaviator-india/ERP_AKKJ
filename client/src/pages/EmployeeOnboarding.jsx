@@ -31,6 +31,11 @@ export default function EmployeeOnboarding() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === "departmentId") {
+      const numericOnly = value.replace(/\D+/g, "");
+      setForm((prev) => ({ ...prev, departmentId: numericOnly }));
+      return;
+    }
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -69,6 +74,16 @@ export default function EmployeeOnboarding() {
     setLoading(true);
     setStatus({ type: "", message: "" });
     try {
+      const departmentId = form.departmentId.trim();
+      const departmentIdValue = departmentId === "" ? null : Number(departmentId);
+      if (departmentIdValue !== null && Number.isNaN(departmentIdValue)) {
+        setStatus({ type: "error", message: "Department ID must be numeric." });
+        setLoading(false);
+        return;
+      }
+      const reportsToValue = form.reportsToEmployeeId
+        ? Number(form.reportsToEmployeeId)
+        : null;
       const payload = {
         CompanyID: company?.CompanyID,
         FirstName: form.firstName,
@@ -78,8 +93,8 @@ export default function EmployeeOnboarding() {
         Role: form.role,
         PhoneNumber: form.phoneNumber || null,
         JobTitle: form.jobTitle || null,
-        DepartmentID: form.departmentId || null,
-        ReportsToEmployeeID: form.reportsToEmployeeId || null,
+        DepartmentID: departmentIdValue,
+        ReportsToEmployeeID: reportsToValue,
         IsActive: form.isActive ? 1 : 0,
       };
       if (form.employeeId) {
@@ -202,9 +217,13 @@ export default function EmployeeOnboarding() {
               Department
               <input
                 type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 name="departmentId"
                 value={form.departmentId}
                 onChange={handleChange}
+                placeholder="Department ID"
+                disabled
               />
             </label>
           </div>
@@ -322,8 +341,14 @@ export default function EmployeeOnboarding() {
                             password: "",
                             phoneNumber: phone || "",
                             jobTitle: jobTitle || "",
-                            departmentId: emp.DepartmentID || "",
-                            reportsToEmployeeId: emp.ReportsToEmployeeID || "",
+                            departmentId:
+                              emp.DepartmentID !== null && emp.DepartmentID !== undefined
+                                ? String(emp.DepartmentID)
+                                : "",
+                            reportsToEmployeeId:
+                              emp.ReportsToEmployeeID !== null && emp.ReportsToEmployeeID !== undefined
+                                ? String(emp.ReportsToEmployeeID)
+                                : "",
                             isActive: emp.IsActive !== 0,
                             employeeId: emp.EmployeeID,
                           })

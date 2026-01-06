@@ -42,6 +42,8 @@ const rolesRouter = require("./routes/roles");
 const taxRatesRouter = require("./routes/taxRates");
 const customerScreenRouter = require("./routes/customerScreen");
 const ocrRouter = require("./routes/ocr");
+const reportsRouter = require("./routes/reports");
+const { ensureReportingViews } = require("./services/reportingViews");
 const { initCustomerScreenHub } = require("./services/customerScreenHub");
 const http = require("http");
 
@@ -49,6 +51,7 @@ const authMiddleware = require("./middleware/auth");
 const {
   requireWritePermission,
   requireMethodPermission,
+  requirePermission,
 } = require("./middleware/permissions");
 
 const app = express();
@@ -58,6 +61,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 // Serve static files from client public directory (qz-tray.js, etc.)
 app.use(express.static(path.join(__dirname, "..", "client", "public")));
+
+ensureReportingViews().catch((error) => {
+  console.error("Failed to initialize reporting views", error);
+});
 
 app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
@@ -259,6 +266,12 @@ app.use(
   authMiddleware,
   requireMethodPermission({ POST: "sales.create", "*": "sales.create" }),
   customerScreenRouter
+);
+app.use(
+  "/api/reports",
+  authMiddleware,
+  requirePermission("reports.view"),
+  reportsRouter
 );
 
 const PORT = process.env.PORT || 4000;

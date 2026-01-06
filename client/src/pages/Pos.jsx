@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  FloppyDisk,
+  House,
+  Lightning,
+  Package,
+  Printer,
+  SignOut,
+  Sliders,
+} from "phosphor-react";
 import api from "../api/http";
 import { useAuth } from "../context/AuthContext";
 import { useConfig } from "../context/ConfigContext";
@@ -479,7 +488,7 @@ export default function Pos() {
         title={t("pos.dashboard")}
       >
         <span className="sidebar-icon" aria-hidden="true">
-          🏠
+          <House size={20} weight="bold" />
         </span>
         <span>{t("pos.dashboard")}</span>
       </button>
@@ -489,26 +498,7 @@ export default function Pos() {
         title={t("pos.logout")}
       >
         <span className="sidebar-icon logout-icon" aria-hidden="true">
-          <svg
-            viewBox="0 0 24 24"
-            role="presentation"
-            focusable="false"
-            width="18"
-            height="18"
-          >
-            <path
-              d="M10.5 4.5a.75.75 0 0 0-.75-.75h-4a2 2 0 0 0-2 2v12.5a2 2 0 0 0 2 2h4a.75.75 0 0 0 .75-.75V17a.75.75 0 1 0-1.5 0v2H6a.5.5 0 0 1-.5-.5V5.75A.5.5 0 0 1 6 5.25h3v2a.75.75 0 0 0 1.5 0z"
-              fill="currentColor"
-            />
-            <path
-              d="M14.53 8.47a.75.75 0 0 0-1.06 1.06L15.94 12l-2.47 2.47a.75.75 0 1 0 1.06 1.06l3-3a.75.75 0 0 0 0-1.06z"
-              fill="currentColor"
-            />
-            <path
-              d="M9.25 12a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5H10a.75.75 0 0 1-.75-.75"
-              fill="currentColor"
-            />
-          </svg>
+          <SignOut size={20} weight="bold" />
         </span>
         <span>{t("pos.logout")}</span>
       </button>
@@ -550,7 +540,7 @@ export default function Pos() {
         }}
         disabled={!cart.length}
       >
-        Clear all
+        {t("pos.clearAll")}
       </button>
     </>
   );
@@ -558,7 +548,7 @@ export default function Pos() {
   const renderControlsContent = () => (
     <div className="pos-footer-row top-controls">
       <label className="control-inline">
-        <span>Document</span>
+        <span>{t("pos.document")}</span>
         <select
           value={documentType}
           onChange={(e) => {
@@ -575,7 +565,7 @@ export default function Pos() {
         </select>
       </label>
       <label className="control-inline">
-        <span>Warehouse</span>
+        <span>{t("pos.warehouse")}</span>
         <select
           value={warehouseId || ""}
           onChange={(e) => {
@@ -583,7 +573,7 @@ export default function Pos() {
             if (cart.length > 0 && warehouseRef.current !== newId) {
               setStatus({
                 type: "error",
-                message: "Clear cart before changing warehouse.",
+                message: t("pos.clearCartBeforeWarehouse"),
               });
               setWarehouseId(warehouseRef.current || "");
               focusSearchSoon();
@@ -604,7 +594,7 @@ export default function Pos() {
         </select>
       </label>
       <label className="control-inline">
-        <span>Price list</span>
+        <span>{t("pos.priceList")}</span>
         <select
           value={activePriceListId || ""}
           onChange={(e) => {
@@ -615,7 +605,7 @@ export default function Pos() {
           }}
           onBlur={() => focusSearchDelayed(100)}
         >
-          <option value="">Base price</option>
+          <option value="">{t("pos.basePrice")}</option>
           {priceLists.map((pl) => (
             <option key={pl.PriceListID} value={pl.PriceListID}>
               {pl.Name}
@@ -624,7 +614,7 @@ export default function Pos() {
         </select>
       </label>
       <div className="control-inline discount-inline">
-        <span>Discount</span>
+        <span>{t("pos.discount")}</span>
         <div className="discount-controls">
           <select
             value={discountType}
@@ -635,9 +625,9 @@ export default function Pos() {
             }
             title={
               Object.keys(promotionOverrides).length > 0
-                ? "Global discount disabled when promo price applies"
+                ? t("pos.discountDisabledPromo")
                 : cart.some((c) => c.ManualOverride)
-                ? "Global discount disabled when manual override is active"
+                ? t("pos.discountDisabledManual")
                 : ""
             }
           >
@@ -1302,7 +1292,11 @@ export default function Pos() {
     if (!productId || !effectiveWarehouseId) return [];
     try {
       const { data } = await api.get("/api/product-lots", {
-        params: { productId, warehouseId: effectiveWarehouseId, includeZero: 1 },
+        params: {
+          productId,
+          warehouseId: effectiveWarehouseId,
+          includeZero: 1,
+        },
       });
       return Array.isArray(data) ? data : [];
     } catch (err) {
@@ -1470,9 +1464,11 @@ export default function Pos() {
     const qty = normalizeQty(Number(quantity || 1));
     const tax = computeTaxForProduct(product);
     const usesLots = options.usesLots ?? Number(product?.UsesLots || 0);
-    const usesSerials = options.usesSerials ?? Number(product?.UsesSerials || 0);
+    const usesSerials =
+      options.usesSerials ?? Number(product?.UsesSerials || 0);
     const price =
-      options.unitPriceOverride !== undefined && options.unitPriceOverride !== null
+      options.unitPriceOverride !== undefined &&
+      options.unitPriceOverride !== null
         ? Number(options.unitPriceOverride)
         : computePrice(productId, qty);
     return {
@@ -1521,7 +1517,8 @@ export default function Pos() {
     }
     const qty = normalizeQty(Number(quantity || 1));
     const usesLots = options.usesLots ?? Number(product?.UsesLots || 0);
-    const usesSerials = options.usesSerials ?? Number(product?.UsesSerials || 0);
+    const usesSerials =
+      options.usesSerials ?? Number(product?.UsesSerials || 0);
     const lotId = options.lotId || null;
     const serialNumber = options.serialNumber || null;
     let createdLine = null;
@@ -1610,14 +1607,18 @@ export default function Pos() {
     const componentLotMap = new Map();
     for (const row of components) {
       const componentProduct =
-        allProducts.find((p) => getProductId(p) === Number(row.ComponentProductID)) ||
-        null;
-      if (!componentProduct || Number(componentProduct?.UsesLots || 0) !== 1) continue;
+        allProducts.find(
+          (p) => getProductId(p) === Number(row.ComponentProductID)
+        ) || null;
+      if (!componentProduct || Number(componentProduct?.UsesLots || 0) !== 1)
+        continue;
       const lot = await fetchFefoLot(Number(row.ComponentProductID));
       if (!lot) {
         setStatus({
           type: "error",
-          message: `No available lot for ${componentProduct.ProductName || "component"}.`,
+          message: `No available lot for ${
+            componentProduct.ProductName || "component"
+          }.`,
         });
         return;
       }
@@ -1662,20 +1663,21 @@ export default function Pos() {
       });
       const componentLines = components
         .map((row) => {
-          const componentProduct =
-            allProducts.find(
-              (p) => getProductId(p) === Number(row.ComponentProductID)
-            ) || {
-              ProductID: row.ComponentProductID,
-              ProductName: row.ProductName,
-              SKU: row.SKU,
-              IsTaxable: row.IsTaxable,
-              TaxRateID: row.TaxRateID,
-              TaxRatePercentage: row.TaxRatePercentage,
-            };
+          const componentProduct = allProducts.find(
+            (p) => getProductId(p) === Number(row.ComponentProductID)
+          ) || {
+            ProductID: row.ComponentProductID,
+            ProductName: row.ProductName,
+            SKU: row.SKU,
+            IsTaxable: row.IsTaxable,
+            TaxRateID: row.TaxRateID,
+            TaxRatePercentage: row.TaxRatePercentage,
+          };
           const qty = Number(row.ComponentQuantity || 0);
           if (qty <= 0) return null;
-          const componentLot = componentLotMap.get(Number(row.ComponentProductID));
+          const componentLot = componentLotMap.get(
+            Number(row.ComponentProductID)
+          );
           const usesLots = Number(componentProduct?.UsesLots || 0) === 1;
           const usesSerials = Number(componentProduct?.UsesSerials || 0) === 1;
           return buildCartItem(componentProduct, qty, {
@@ -1878,7 +1880,9 @@ export default function Pos() {
         }
         const optionsByLine = {};
         for (const line of packLines) {
-          optionsByLine[line.LineID] = await fetchLotsForProduct(line.ProductID);
+          optionsByLine[line.LineID] = await fetchLotsForProduct(
+            line.ProductID
+          );
         }
         setLotOptionsByLine(optionsByLine);
         setLotOptions([]);
@@ -1942,7 +1946,12 @@ export default function Pos() {
   };
 
   const closeLotModal = () => {
-    setLotModal({ open: false, mode: "single", lineId: null, packGroupId: null });
+    setLotModal({
+      open: false,
+      mode: "single",
+      lineId: null,
+      packGroupId: null,
+    });
     setLotOptions([]);
     setLotOptionsByLine({});
     setLotModalError("");
@@ -2051,7 +2060,9 @@ export default function Pos() {
       const netWithTax = Math.max(0, gross - lineDisc);
       const rate = line.IsTaxable ? Number(line.TaxRatePercentage || 0) : 0;
       const base =
-        rate > 0 && priceIncludesTax ? netWithTax / (1 + rate / 100) : netWithTax;
+        rate > 0 && priceIncludesTax
+          ? netWithTax / (1 + rate / 100)
+          : netWithTax;
       const display =
         rate > 0
           ? priceIncludesTax
@@ -2240,10 +2251,8 @@ export default function Pos() {
             : item.rate > 0
             ? targetBase * (1 + item.rate / 100)
             : targetBase;
-          const lineDisplaySavings = Math.max(
-            0,
-            item.unitDisplay - targetDisplay
-          ) * item.qty;
+          const lineDisplaySavings =
+            Math.max(0, item.unitDisplay - targetDisplay) * item.qty;
           overrideDisplay += lineDisplaySavings;
 
           const storedTargetPrice = priceIncludesTax
@@ -2301,10 +2310,7 @@ export default function Pos() {
           const cappedBase = Math.min(eligibleSubtotal, rawAmount);
           promoDiscountBase = cappedBase;
           const factor = conversionFactor > 0 ? conversionFactor : 1;
-          promoDiscountDisplay = Math.min(
-            eligibleDisplay,
-            cappedBase * factor
-          );
+          promoDiscountDisplay = Math.min(eligibleDisplay, cappedBase * factor);
         }
       } else if (promo.type === "bogo") {
         const buyQty = Number(promo.minQuantity || 0);
@@ -2343,9 +2349,7 @@ export default function Pos() {
         const components = (promo.scopes && promo.scopes.products) || [];
         if (components.length) {
           const compMap = {};
-          components.forEach(
-            (c) => (compMap[String(c).toLowerCase()] = [])
-          );
+          components.forEach((c) => (compMap[String(c).toLowerCase()] = []));
           eligibleItems.forEach((item) => {
             const line = item.line;
             const prodName = (
@@ -2419,8 +2423,7 @@ export default function Pos() {
       }
 
       const totalBaseSavings = promoDiscountBase + overrideBase;
-      const totalDisplaySavingsRaw =
-        promoDiscountDisplay + overrideDisplay;
+      const totalDisplaySavingsRaw = promoDiscountDisplay + overrideDisplay;
 
       if (
         !isShippingPromo &&
@@ -2592,10 +2595,7 @@ export default function Pos() {
     subtotal - globalDiscountAmount - promotionDiscountAmount + taxTotal,
     0
   );
-  const totalDiscountsDisplay = Math.max(
-    0,
-    grossBeforePromotions - finalTotal
-  );
+  const totalDiscountsDisplay = Math.max(0, grossBeforePromotions - finalTotal);
 
   const getReceiptPrefs = () => {
     const defaults = {
@@ -2682,14 +2682,24 @@ export default function Pos() {
       </style>
     `;
 
+    const taxLabel = t("pos.tax");
+    const discountLabel = t("pos.discount");
+    const subtotalLabel = t("pos.subtotal");
+    const totalLabel = t("pos.total");
+    const promoPrefix = t("pos.promoLabel");
+    const promoFallback = t("pos.promotionFallback");
+    const freeShippingLabel = t("pos.freeShipping");
+    const customerLabel =
+      selectedCustomer?.CustomerName || t("pos.defaultCustomer");
+
     const taxLine = sizeCfg.showTax
-      ? `<div class="row"><span>Tax</span><span>${currencyFormatter.format(
+      ? `<div class="row"><span>${taxLabel}</span><span>${currencyFormatter.format(
           taxTotal
         )}</span></div>`
       : "";
     const discountLine =
       sizeCfg.showDiscount && totalDiscountsDisplay > 0
-        ? `<div class="row"><span>Discount</span><span>-${currencyFormatter.format(
+        ? `<div class="row"><span>${discountLabel}</span><span>-${currencyFormatter.format(
             totalDiscountsDisplay
           )}</span></div>`
         : "";
@@ -2697,10 +2707,10 @@ export default function Pos() {
     const promosLine = appliedPromotions.length
       ? appliedPromotions
           .map((p) => {
-            const label = `Promo: ${p.name || "Promotion"}`;
+            const label = `${promoPrefix}: ${p.name || promoFallback}`;
             const value =
               p.type === "shipping"
-                ? "Free shipping"
+                ? freeShippingLabel
                 : `-${currencyFormatter.format(p.amount)}`;
             return `<div class="promo-line"><span>${label}</span><span>${value}</span></div>`;
           })
@@ -2714,27 +2724,27 @@ export default function Pos() {
           ${sizeCfg.showLogo ? `<div class="logo">${companyLabel}</div>` : ""}
           <div>${documentType}</div>
           <div>${new Date().toLocaleString()}</div>
-          <div>${selectedCustomer?.CustomerName || "Customer"}</div>
+          <div>${customerLabel}</div>
         </div>
         <div class="row head">
-          <span>Item</span>
-          <span>Qty</span>
-          <span>Price</span>
-          ${sizeCfg.showTax ? `<span>Tax</span>` : ""}
-          ${sizeCfg.showDiscount ? `<span>Disc</span>` : ""}
-          <span>Total</span>
+          <span>${t("pos.product")}</span>
+          <span>${t("pos.qty")}</span>
+          <span>${t("pos.price")}</span>
+          ${sizeCfg.showTax ? `<span>${taxLabel}</span>` : ""}
+          ${sizeCfg.showDiscount ? `<span>${t("pos.disc")}</span>` : ""}
+          <span>${totalLabel}</span>
         </div>
         ${itemsRows}
         ${promosLine}
         <div class="totals">
-          <div class="row"><span>Subtotal</span><span>${currencyFormatter.format(
-            subtotal
-          )}</span></div>
+          <div class="row"><span>${subtotalLabel}</span><span>${currencyFormatter.format(
+      subtotal
+    )}</span></div>
           ${taxLine}
           ${discountLine}
-          <div class="row" style="font-weight:800;"><span>Total</span><span>${currencyFormatter.format(
-            finalTotal
-          )}</span></div>
+          <div class="row" style="font-weight:800;"><span>${totalLabel}</span><span>${currencyFormatter.format(
+      finalTotal
+    )}</span></div>
         </div>
         ${
           sizeCfg.footerText
@@ -2747,7 +2757,10 @@ export default function Pos() {
 
   const handlePrintReceipt = () => {
     if (!cart.length) {
-      setStatus({ type: "error", message: "Add items before printing." });
+      setStatus({
+        type: "error",
+        message: t("pos.addItemsBeforePrinting"),
+      });
       return;
     }
     const html = buildReceiptHtml();
@@ -2923,20 +2936,20 @@ export default function Pos() {
           ? Math.max(0, Math.min(Number(item.DiscountValue) || 0, gross))
           : 0;
 
-        return {
-          ProductID: item.ProductID,
-          Description: item.ProductName,
-          Quantity: qty,
-          UnitPrice: effectivePrice,
+      return {
+        ProductID: item.ProductID,
+        Description: item.ProductName,
+        Quantity: qty,
+        UnitPrice: effectivePrice,
         DiscountPercentage: discountPct,
         DiscountAmountItem: discountAmount,
         TaxRatePercentage: item.TaxRatePercentage || 0,
-          TaxRateID: item.TaxRateID || null,
-          IsLineExenta: item.IsTaxable ? 0 : 1,
-          ProductLotID: item.ProductLotID || null,
-          ProductSerialID: null,
-        };
-      });
+        TaxRateID: item.TaxRateID || null,
+        IsLineExenta: item.IsTaxable ? 0 : 1,
+        ProductLotID: item.ProductLotID || null,
+        ProductSerialID: null,
+      };
+    });
 
   const parkTicket = async () => {
     if (documentType !== "TICKET") {
@@ -3390,7 +3403,15 @@ export default function Pos() {
       lot: lotModal.open,
       serial: serialModal.open,
     };
-  }, [customerModal, employeeModal, ticketModal, pinModal, paymentModal, lotModal.open, serialModal.open]);
+  }, [
+    customerModal,
+    employeeModal,
+    ticketModal,
+    pinModal,
+    paymentModal,
+    lotModal.open,
+    serialModal.open,
+  ]);
 
   useEffect(() => {
     if (lotModal.open || serialModal.open) return;
@@ -3399,7 +3420,9 @@ export default function Pos() {
       openLotModalForItem(pendingLot);
       return;
     }
-    const pendingSerial = cart.find((line) => line.UsesSerials && !line.SerialNumber);
+    const pendingSerial = cart.find(
+      (line) => line.UsesSerials && !line.SerialNumber
+    );
     if (pendingSerial) {
       openSerialModalForLine(pendingSerial);
     }
@@ -3458,14 +3481,29 @@ export default function Pos() {
               </span>
             </div>
             <div className="mobile-actions mobile-inline">
-              <button className="btn ghost" onClick={() => setActionsSheet(true)}>
-                <span className="btn-icon" aria-hidden="true">⚡</span>
+              <button
+                className="btn ghost"
+                onClick={() => setActionsSheet(true)}
+              >
+                <span className="btn-icon" aria-hidden="true">
+                  <Lightning size={22} weight="bold" />
+                </span>
               </button>
-              <button className="btn ghost" onClick={() => setCatalogSheet(true)}>
-                <span className="btn-icon" aria-hidden="true">📦</span>
+              <button
+                className="btn ghost"
+                onClick={() => setCatalogSheet(true)}
+              >
+                <span className="btn-icon" aria-hidden="true">
+                  <Package size={22} weight="bold" />
+                </span>
               </button>
-              <button className="btn ghost" onClick={() => setControlsSheet(true)}>
-                <span className="btn-icon" aria-hidden="true">🎛</span>
+              <button
+                className="btn ghost"
+                onClick={() => setControlsSheet(true)}
+              >
+                <span className="btn-icon" aria-hidden="true">
+                  <Sliders size={22} weight="bold" />
+                </span>
               </button>
             </div>
           </div>
@@ -3561,7 +3599,7 @@ export default function Pos() {
           )}
         </div>
 
-      <div className="order-list">
+        <div className="order-list">
           {cart.length === 0 && <p className="muted">{t("pos.emptyState")}</p>}
           {cart.length > 0 && (
             <div className="order-row order-head">
@@ -3577,202 +3615,239 @@ export default function Pos() {
           {cart.map((item, idx) => {
             const lineId = getLineId(item) || `${item.ProductID}-${idx}`;
             return (
-            <div className="swipe-container" key={lineId}>
-              <div
-                className="swipe-delete-bar"
-                style={{
-                  width: `${Math.min(
-                    80,
-                    Math.max(0, -(swipeOffsets[lineId] || 0))
-                  )}px`,
-                }}
-              >
-                🗑
-              </div>
-              <div
-                className={`order-item order-row swipe-row ${
-                  item.IsPackComponent ? "pack-component" : item.IsPack ? "pack-line" : ""
-                }`}
-                onTouchStart={(e) => handleRowTouchStart(lineId, e)}
-                onTouchMove={(e) => handleRowTouchMove(lineId, e)}
-                onTouchEnd={(e) => handleRowTouchEnd(lineId, e)}
-                style={{
-                  transform: `translateX(${swipeOffsets[lineId] || 0}px)`,
-                  transition:
-                    swipingId === lineId
-                      ? "none"
-                      : "transform 0.15s ease",
-                }}
-              >
-              {(() => {
-                const parts = computeLineParts(item, idx);
-                item.__lineParts = parts; // cache for render below
-                return null;
-              })()}
-                <div className="order-product">
-                  <strong>{item.ProductName}</strong>
-                  {!item.IsPackComponent && (
-                    <p className="muted small sku-mobile">{item.SKU}</p>
-                  )}
-                  {!item.IsPackComponent && item.UsesLots ? (
-                    <p className="muted small">
-                      Lot: {item.LotNumber || "Select lot"}
-                      {item.LotExpirationDate
-                        ? ` · Exp ${formatShortDate(item.LotExpirationDate)}`
-                        : ""}
-                    </p>
-                  ) : null}
-                  {item.UsesSerials ? (
-                    <p className="muted small">
-                      Serial: {item.SerialNumber || "Select serial"}
-                    </p>
-                  ) : null}
+              <div className="swipe-container" key={lineId}>
+                <div
+                  className="swipe-delete-bar"
+                  style={{
+                    width: `${Math.min(
+                      80,
+                      Math.max(0, -(swipeOffsets[lineId] || 0))
+                    )}px`,
+                  }}
+                >
+                  🗑
                 </div>
-              <div className="qty-controls">
-                {item.IsPackComponent ? (
-                  <span className="qty-static">{item.Quantity}</span>
-                ) : isMobile ? (
-                  <select
-                    className="qty-wheel-select"
-                    value={item.Quantity}
-                    onChange={(e) =>
-                      setQuantityValue(lineId, e.target.value)
-                    }
-                    onTouchStart={(e) => e.stopPropagation()}
-                    onTouchEnd={(e) => e.stopPropagation()}
-                  >
-                    {Array.from({ length: 201 }, (_, i) => i).map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <>
-                    <button onClick={() => updateQuantity(lineId, -1)}>-</button>
-                    <span
-                      onTouchStart={(e) => handleQtyTouchStart(lineId, e)}
-                      onTouchEnd={(e) => handleQtyTouchEnd(lineId, e)}
-                    >
-                      {item.Quantity}
-                    </span>
-                    <button onClick={() => updateQuantity(lineId, 1)}>+</button>
-                  </>
-                )}
-              </div>
-              {!item.IsPackComponent && (
-                <div className="price">
-                  {promotionOverrides[idx] ? (
-                    <>
-                      <div
-                        style={{
-                          textDecoration: "line-through",
-                          color: "#999",
-                          fontSize: 12,
-                        }}
-                      >
-                        {currencyFormatter.format(item.UnitPrice)}
-                      </div>
-                      <div style={{ fontWeight: 700 }}>
-                        {currencyFormatter.format(
-                          promotionOverrides[idx].targetPrice
-                        )}
-                      </div>
-                      <div className="muted small">Promo</div>
-                    </>
-                  ) : item.ManualOverride &&
-                    item.OriginalUnitPrice !== undefined ? (
-                    <>
-                      <div
-                        style={{
-                          textDecoration: "line-through",
-                          color: "#999",
-                          fontSize: 12,
-                        }}
-                      >
-                        {currencyFormatter.format(item.OriginalUnitPrice)}
-                      </div>
-                      <div style={{ fontWeight: 700 }}>
-                        {currencyFormatter.format(item.UnitPrice)}
-                      </div>
-                      <div className="muted small">Manual</div>
-                    </>
-                  ) : (
-                    currencyFormatter.format(item.UnitPrice)
-                  )}
-                </div>
-              )}
-              {!item.IsPackComponent && (
-                <div className="discount-cell">
-                  <select
-                    value={item.DiscountType || "percent"}
-                    onChange={(e) =>
-                      updateLineDiscountType(lineId, e.target.value)
-                    }
-                    disabled={
-                      Boolean(promotionOverrides[idx]) || item.ManualOverride
-                    }
-                    title={
-                      promotionOverrides[idx]
-                        ? "Line discounts disabled when promo price applies"
-                        : item.ManualOverride
-                        ? "Line discounts disabled when manually overridden"
-                        : ""
-                    }
-                  >
-                    <option value="amount">$</option>
-                    <option value="percent">%</option>
-                  </select>
-                  <input
-                    type="number"
-                    min="0"
-                    value={item.DiscountValue || 0}
-                    onChange={(e) =>
-                      updateLineDiscountValue(lineId, e.target.value)
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        if (searchInputRef.current) {
-                          searchInputRef.current.focus();
+                <div
+                  className={`order-item order-row swipe-row ${
+                    item.IsPackComponent
+                      ? "pack-component"
+                      : item.IsPack
+                      ? "pack-line"
+                      : ""
+                  }`}
+                  onTouchStart={(e) => handleRowTouchStart(lineId, e)}
+                  onTouchMove={(e) => handleRowTouchMove(lineId, e)}
+                  onTouchEnd={(e) => handleRowTouchEnd(lineId, e)}
+                  style={{
+                    transform: `translateX(${swipeOffsets[lineId] || 0}px)`,
+                    transition:
+                      swipingId === lineId ? "none" : "transform 0.15s ease",
+                  }}
+                >
+                  {(() => {
+                    const parts = computeLineParts(item, idx);
+                    item.__lineParts = parts; // cache for render below
+                    return null;
+                  })()}
+                  <div className="order-product">
+                    <strong>{item.ProductName}</strong>
+                    {!item.IsPackComponent && (
+                      <p className="muted small sku-mobile">{item.SKU}</p>
+                    )}
+                    {!item.IsPackComponent && item.UsesLots ? (
+                      <p className="muted small">
+                        Lot: {item.LotNumber || "Select lot"}
+                        {item.LotExpirationDate
+                          ? ` · Exp ${formatShortDate(item.LotExpirationDate)}`
+                          : ""}
+                      </p>
+                    ) : null}
+                    {item.UsesSerials ? (
+                      <p className="muted small">
+                        Serial: {item.SerialNumber || "Select serial"}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="qty-controls">
+                    {item.IsPackComponent ? (
+                      <span className="qty-static">{item.Quantity}</span>
+                    ) : isMobile ? (
+                      <select
+                        className="qty-wheel-select"
+                        value={item.Quantity}
+                        onChange={(e) =>
+                          setQuantityValue(lineId, e.target.value)
                         }
-                      }
-                    }}
-                    disabled={
-                      Boolean(promotionOverrides[idx]) || item.ManualOverride
-                    }
-                  />
-                </div>
-              )}
-              {!item.IsPackComponent && (
-                <div className="tax muted small">
-                  {item.__lineParts?.rate
-                    ? `${Number(item.__lineParts.rate).toFixed(2)}%`
-                    : "0%"}
-                </div>
-              )}
-              {!item.IsPackComponent && (
-                <div className="price">
-                  {currencyFormatter.format(item.__lineParts?.total || 0)}
-                </div>
-              )}
-                {!item.IsPackComponent && (
-                  <div
-                    className="actions"
-                    style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}
-                  >
-                    {!!(item.IsPack
-                      ? cart.some(
-                          (line) =>
-                            line.PackGroupId === item.PackGroupId && line.UsesLots
-                        )
-                      : item.UsesLots) && (
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onTouchEnd={(e) => e.stopPropagation()}
+                      >
+                        {Array.from({ length: 201 }, (_, i) => i).map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <>
+                        <button onClick={() => updateQuantity(lineId, -1)}>
+                          -
+                        </button>
+                        <span
+                          onTouchStart={(e) => handleQtyTouchStart(lineId, e)}
+                          onTouchEnd={(e) => handleQtyTouchEnd(lineId, e)}
+                        >
+                          {item.Quantity}
+                        </span>
+                        <button onClick={() => updateQuantity(lineId, 1)}>
+                          +
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  {!item.IsPackComponent && (
+                    <div className="price">
+                      {promotionOverrides[idx] ? (
+                        <>
+                          <div
+                            style={{
+                              textDecoration: "line-through",
+                              color: "#999",
+                              fontSize: 12,
+                            }}
+                          >
+                            {currencyFormatter.format(item.UnitPrice)}
+                          </div>
+                          <div style={{ fontWeight: 700 }}>
+                            {currencyFormatter.format(
+                              promotionOverrides[idx].targetPrice
+                            )}
+                          </div>
+                          <div className="muted small">Promo</div>
+                        </>
+                      ) : item.ManualOverride &&
+                        item.OriginalUnitPrice !== undefined ? (
+                        <>
+                          <div
+                            style={{
+                              textDecoration: "line-through",
+                              color: "#999",
+                              fontSize: 12,
+                            }}
+                          >
+                            {currencyFormatter.format(item.OriginalUnitPrice)}
+                          </div>
+                          <div style={{ fontWeight: 700 }}>
+                            {currencyFormatter.format(item.UnitPrice)}
+                          </div>
+                          <div className="muted small">Manual</div>
+                        </>
+                      ) : (
+                        currencyFormatter.format(item.UnitPrice)
+                      )}
+                    </div>
+                  )}
+                  {!item.IsPackComponent && (
+                    <div className="discount-cell">
+                      <select
+                        value={item.DiscountType || "percent"}
+                        onChange={(e) =>
+                          updateLineDiscountType(lineId, e.target.value)
+                        }
+                        disabled={
+                          Boolean(promotionOverrides[idx]) ||
+                          item.ManualOverride
+                        }
+                        title={
+                          promotionOverrides[idx]
+                            ? "Line discounts disabled when promo price applies"
+                            : item.ManualOverride
+                            ? "Line discounts disabled when manually overridden"
+                            : ""
+                        }
+                      >
+                        <option value="amount">$</option>
+                        <option value="percent">%</option>
+                      </select>
+                      <input
+                        type="number"
+                        min="0"
+                        value={item.DiscountValue || 0}
+                        onChange={(e) =>
+                          updateLineDiscountValue(lineId, e.target.value)
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (searchInputRef.current) {
+                              searchInputRef.current.focus();
+                            }
+                          }
+                        }}
+                        disabled={
+                          Boolean(promotionOverrides[idx]) ||
+                          item.ManualOverride
+                        }
+                      />
+                    </div>
+                  )}
+                  {!item.IsPackComponent && (
+                    <div className="tax muted small">
+                      {item.__lineParts?.rate
+                        ? `${Number(item.__lineParts.rate).toFixed(2)}%`
+                        : "0%"}
+                    </div>
+                  )}
+                  {!item.IsPackComponent && (
+                    <div className="price">
+                      {currencyFormatter.format(item.__lineParts?.total || 0)}
+                    </div>
+                  )}
+                  {!item.IsPackComponent && (
+                    <div
+                      className="actions"
+                      style={{
+                        display: "flex",
+                        gap: 6,
+                        justifyContent: "flex-end",
+                      }}
+                    >
+                      {!!(item.IsPack
+                        ? cart.some(
+                            (line) =>
+                              line.PackGroupId === item.PackGroupId &&
+                              line.UsesLots
+                          )
+                        : item.UsesLots) && (
+                        <button
+                          className="btn ghost small"
+                          type="button"
+                          onClick={() => openLotModalForItem(item)}
+                          title="Change lot"
+                          aria-label="Change lot"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            width="16"
+                            height="16"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <rect x="3" y="3" width="7" height="7" rx="1" />
+                            <rect x="14" y="3" width="7" height="7" rx="1" />
+                            <rect x="3" y="14" width="7" height="7" rx="1" />
+                            <rect x="14" y="14" width="7" height="7" rx="1" />
+                          </svg>
+                        </button>
+                      )}
                       <button
-                        className="btn ghost small"
+                        className="btn ghost small override-btn"
                         type="button"
-                        onClick={() => openLotModalForItem(item)}
-                        title="Change lot"
-                        aria-label="Change lot"
+                        onClick={() => openOverrideModal(item, idx)}
+                        title="Override price"
+                        aria-label="Override price"
                       >
                         <svg
                           viewBox="0 0 24 24"
@@ -3784,41 +3859,40 @@ export default function Pos() {
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         >
-                          <rect x="3" y="3" width="7" height="7" rx="1" />
-                          <rect x="14" y="3" width="7" height="7" rx="1" />
-                          <rect x="3" y="14" width="7" height="7" rx="1" />
-                          <rect x="14" y="14" width="7" height="7" rx="1" />
+                          <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" />
+                          <path d="M14.06 4.94l3.75 3.75" />
                         </svg>
                       </button>
-                    )}
-                    <button
-                      className="btn ghost small override-btn"
-                      type="button"
-                      onClick={() => openOverrideModal(item, idx)}
-                      title="Override price"
-                      aria-label="Override price"
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        width="16"
-                        height="16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" />
-                        <path d="M14.06 4.94l3.75 3.75" />
-                      </svg>
-                    </button>
-                    {!!item.UsesSerials && (
+                      {!!item.UsesSerials && (
+                        <button
+                          className="btn ghost small"
+                          type="button"
+                          onClick={() => openSerialModalForLine(item)}
+                          title="Change serial"
+                          aria-label="Change serial"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            width="16"
+                            height="16"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <circle cx="8" cy="8" r="3" />
+                            <circle cx="16" cy="16" r="3" />
+                            <path d="M11 11l2 2" />
+                            <path d="M12 8h8" />
+                            <path d="M4 16h8" />
+                          </svg>
+                        </button>
+                      )}
                       <button
-                        className="btn ghost small"
-                        type="button"
-                        onClick={() => openSerialModalForLine(item)}
-                        title="Change serial"
-                        aria-label="Change serial"
+                        className="delete-item desktop-delete"
+                        onClick={() => removeItem(lineId)}
+                        aria-label="Remove item"
                       >
                         <svg
                           viewBox="0 0 24 24"
@@ -3830,40 +3904,17 @@ export default function Pos() {
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         >
-                          <circle cx="8" cy="8" r="3" />
-                          <circle cx="16" cy="16" r="3" />
-                          <path d="M11 11l2 2" />
-                          <path d="M12 8h8" />
-                          <path d="M4 16h8" />
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                          <path d="M10 11v6" />
+                          <path d="M14 11v6" />
+                          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
                         </svg>
                       </button>
-                    )}
-                    <button
-                      className="delete-item desktop-delete"
-                      onClick={() => removeItem(lineId)}
-                    aria-label="Remove item"
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="16"
-                      height="16"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-                      <path d="M10 11v6" />
-                      <path d="M14 11v6" />
-                      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                    </svg>
-                  </button>
+                    </div>
+                  )}
                 </div>
-              )}
               </div>
-            </div>
             );
           })}
           {appliedPromotions.length > 0 && (
@@ -3886,12 +3937,17 @@ export default function Pos() {
                     style={{ display: "flex", justifyContent: "space-between" }}
                   >
                     <span>
-                      Promo: {p.name || "Promotion"}
-                      {p.type === "shipping" ? " (Free shipping)" : ""}
+                      {`${t("pos.promoLabel")}: ${
+                        p.name || t("pos.promotionFallback")
+                      }${
+                        p.type === "shipping"
+                          ? ` (${t("pos.freeShipping")})`
+                          : ""
+                      }`}
                     </span>
                     <span>
                       {p.type === "shipping"
-                        ? "Free shipping"
+                        ? t("pos.freeShipping")
                         : `-${currencyFormatter.format(p.amount)}`}
                     </span>
                   </div>
@@ -3905,26 +3961,28 @@ export default function Pos() {
 
           <div className="pos-footer-row totals-row">
             <div>
-              <p>Subtotal</p>
+              <p>{t("pos.subtotal")}</p>
               <strong>{currencyFormatter.format(subtotal)}</strong>
             </div>
             <div>
-              <p>Tax</p>
+              <p>{t("pos.tax")}</p>
               <strong>{currencyFormatter.format(taxTotal)}</strong>
             </div>
             <div>
-              <p>Discount</p>
-              <strong>-{currencyFormatter.format(totalDiscountsDisplay)}</strong>
+              <p>{t("pos.discount")}</p>
+              <strong>
+                -{currencyFormatter.format(totalDiscountsDisplay)}
+              </strong>
             </div>
             {appliedPromotions.length > 0 && (
               <div className="promotions-summary">
-                <p>Promotions</p>
+                <p>{t("pos.promotionsSummary")}</p>
                 <div className="muted small">
                   {appliedPromotions.map((p) => (
                     <div key={p.id || p.name}>
-                      {p.name || "Promotion"}:{" "}
+                      {`${p.name || t("pos.promotionFallback")}: `}
                       {p.type === "shipping"
-                        ? "Free shipping"
+                        ? t("pos.freeShipping")
                         : `-${currencyFormatter.format(p.amount)}`}
                     </div>
                   ))}
@@ -3932,7 +3990,7 @@ export default function Pos() {
               </div>
             )}
             <div className="order-total">
-              <p>Total</p>
+              <p>{t("pos.total")}</p>
               <strong>{currencyFormatter.format(finalTotal)}</strong>
             </div>
             <div className="order-actions charge-area">
@@ -3940,19 +3998,24 @@ export default function Pos() {
                 className="btn ghost"
                 onClick={handlePrintReceipt}
                 disabled={!cart.length || checkoutLoading}
+                title={t("pos.printReceipt")}
+                aria-label={t("pos.printReceipt")}
               >
-                <span className="btn-icon" aria-hidden="true">🖨️</span>
-                <span className="btn-label">Print receipt</span>
+                <span className="btn-icon" aria-hidden="true">
+                  <Printer size={24} weight="bold" />
+                </span>
               </button>
               {documentType === "TICKET" ? (
                 <button
                   className="btn primary save-icon-btn"
                   onClick={saveTicketForBilling}
                   disabled={!cart.length || checkoutLoading}
-                  title="Save Ticket"
+                  title={t("pos.saveTicket")}
+                  aria-label={t("pos.saveTicket")}
                 >
-                  <span className="btn-icon" aria-hidden="true">💾</span>
-                  <span className="btn-label">Save</span>
+                  <span className="btn-icon" aria-hidden="true">
+                    <FloppyDisk size={24} weight="bold" />
+                  </span>
                 </button>
               ) : (
                 <>
@@ -3960,18 +4023,26 @@ export default function Pos() {
                     className="btn ghost"
                     onClick={handleSave}
                     disabled={!cart.length || checkoutLoading}
+                    title={t("pos.save")}
+                    aria-label={t("pos.save")}
                   >
-                    <span className="btn-icon" aria-hidden="true">💾</span>
-                    <span className="btn-label">Save</span>
+                    <span className="btn-icon" aria-hidden="true">
+                      <FloppyDisk size={24} weight="bold" />
+                    </span>
                   </button>
                   <button
                     className="btn primary"
                     onClick={handleCharge}
                     disabled={!cart.length || checkoutLoading}
+                    title={
+                      checkoutLoading ? t("pos.processing") : t("pos.charge")
+                    }
+                    aria-label={
+                      checkoutLoading ? t("pos.processing") : t("pos.charge")
+                    }
                   >
-                    <span className="btn-icon" aria-hidden="true">⚡</span>
-                    <span className="btn-label">
-                      {checkoutLoading ? "Processing..." : "Charge"}
+                    <span className="btn-icon" aria-hidden="true">
+                      <Lightning size={24} weight="bold" />
                     </span>
                   </button>
                 </>
@@ -4010,7 +4081,7 @@ export default function Pos() {
           }}
           aria-label={categoryCollapsed ? "Show categories" : "Hide categories"}
         >
-          {categoryCollapsed ? ">" : "<"}
+          {categoryCollapsed ? "▶" : "◀"}
         </button>
       </div>
 
@@ -4027,7 +4098,9 @@ export default function Pos() {
               </button>
             </div>
             <div className="sheet-body">
-              <div className="order-actions vertical">{renderActionButtons()}</div>
+              <div className="order-actions vertical">
+                {renderActionButtons()}
+              </div>
             </div>
           </div>
         </div>
@@ -4136,12 +4209,16 @@ export default function Pos() {
                     placeholder="Search lot number"
                     onKeyDown={(e) => {
                       const filtered = lotOptions.filter((lot) =>
-                        (lot.LotNumber || "").toLowerCase().includes(lotSearch.toLowerCase())
+                        (lot.LotNumber || "")
+                          .toLowerCase()
+                          .includes(lotSearch.toLowerCase())
                       );
                       if (e.key === "ArrowDown") {
                         e.preventDefault();
                         setLotHighlight((prev) =>
-                          filtered.length === 0 ? 0 : (prev + 1) % filtered.length
+                          filtered.length === 0
+                            ? 0
+                            : (prev + 1) % filtered.length
                         );
                       } else if (e.key === "ArrowUp") {
                         e.preventDefault();
@@ -4149,8 +4226,8 @@ export default function Pos() {
                           filtered.length === 0
                             ? 0
                             : prev <= 0
-                              ? filtered.length - 1
-                              : prev - 1
+                            ? filtered.length - 1
+                            : prev - 1
                         );
                       } else if (e.key === "Enter") {
                         e.preventDefault();
@@ -4163,10 +4240,15 @@ export default function Pos() {
                     }}
                   />
                 </label>
-                <ul className="list" style={{ maxHeight: 240, overflowY: "auto" }}>
+                <ul
+                  className="list"
+                  style={{ maxHeight: 240, overflowY: "auto" }}
+                >
                   {lotOptions
                     .filter((lot) =>
-                      (lot.LotNumber || "").toLowerCase().includes(lotSearch.toLowerCase())
+                      (lot.LotNumber || "")
+                        .toLowerCase()
+                        .includes(lotSearch.toLowerCase())
                     )
                     .map((lot, idx) => (
                       <li
@@ -4174,7 +4256,8 @@ export default function Pos() {
                         className="list-row"
                         style={{
                           cursor: "pointer",
-                          background: idx === lotHighlight ? "#eef2ff" : "transparent",
+                          background:
+                            idx === lotHighlight ? "#eef2ff" : "transparent",
                         }}
                         onClick={() => {
                           applyLotToLine(lotModalLine.LineID, lot);
@@ -4193,8 +4276,12 @@ export default function Pos() {
                       </li>
                     ))}
                   {lotOptions.filter((lot) =>
-                    (lot.LotNumber || "").toLowerCase().includes(lotSearch.toLowerCase())
-                  ).length === 0 && <li className="muted small list-row">No lots</li>}
+                    (lot.LotNumber || "")
+                      .toLowerCase()
+                      .includes(lotSearch.toLowerCase())
+                  ).length === 0 && (
+                    <li className="muted small list-row">No lots</li>
+                  )}
                 </ul>
               </>
             )}
@@ -4209,7 +4296,9 @@ export default function Pos() {
                       return (
                         <div key={line.LineID} className="entity-row">
                           <div className="stack">
-                            <span className="entity-name">{line.ProductName}</span>
+                            <span className="entity-name">
+                              {line.ProductName}
+                            </span>
                             <span className="muted small">{line.SKU}</span>
                           </div>
                           <div className="inline-inputs">
@@ -4225,10 +4314,16 @@ export default function Pos() {
                             >
                               <option value="">Select lot</option>
                               {options.map((lot) => (
-                                <option key={lot.ProductLotID} value={lot.ProductLotID}>
-                                  {lot.LotNumber} (qty {Number(lot.Quantity || 0)}
+                                <option
+                                  key={lot.ProductLotID}
+                                  value={lot.ProductLotID}
+                                >
+                                  {lot.LotNumber} (qty{" "}
+                                  {Number(lot.Quantity || 0)}
                                   {lot.ExpirationDate
-                                    ? `, exp ${formatShortDate(lot.ExpirationDate)}`
+                                    ? `, exp ${formatShortDate(
+                                        lot.ExpirationDate
+                                      )}`
                                     : ""}
                                   )
                                 </option>
@@ -4252,7 +4347,9 @@ export default function Pos() {
         <div className="modal">
           <div className="modal-content">
             <h3>Select serial</h3>
-            {serialModalError && <p className="status error">{serialModalError}</p>}
+            {serialModalError && (
+              <p className="status error">{serialModalError}</p>
+            )}
             {serialModalLoading ? (
               <p className="muted">Loading serials...</p>
             ) : (
@@ -4268,12 +4365,16 @@ export default function Pos() {
                     placeholder="Search serial"
                     onKeyDown={(e) => {
                       const filtered = serialOptions.filter((s) =>
-                        (s.SerialNumber || "").toLowerCase().includes(serialSearch.toLowerCase())
+                        (s.SerialNumber || "")
+                          .toLowerCase()
+                          .includes(serialSearch.toLowerCase())
                       );
                       if (e.key === "ArrowDown") {
                         e.preventDefault();
                         setSerialHighlight((prev) =>
-                          filtered.length === 0 ? 0 : (prev + 1) % filtered.length
+                          filtered.length === 0
+                            ? 0
+                            : (prev + 1) % filtered.length
                         );
                       } else if (e.key === "ArrowUp") {
                         e.preventDefault();
@@ -4281,8 +4382,8 @@ export default function Pos() {
                           filtered.length === 0
                             ? 0
                             : prev <= 0
-                              ? filtered.length - 1
-                              : prev - 1
+                            ? filtered.length - 1
+                            : prev - 1
                         );
                       } else if (e.key === "Enter") {
                         e.preventDefault();
@@ -4295,10 +4396,15 @@ export default function Pos() {
                     }}
                   />
                 </label>
-                <ul className="list" style={{ maxHeight: 240, overflowY: "auto" }}>
+                <ul
+                  className="list"
+                  style={{ maxHeight: 240, overflowY: "auto" }}
+                >
                   {serialOptions
                     .filter((s) =>
-                      (s.SerialNumber || "").toLowerCase().includes(serialSearch.toLowerCase())
+                      (s.SerialNumber || "")
+                        .toLowerCase()
+                        .includes(serialSearch.toLowerCase())
                     )
                     .map((s, idx) => (
                       <li
@@ -4306,7 +4412,8 @@ export default function Pos() {
                         className="list-row"
                         style={{
                           cursor: "pointer",
-                          background: idx === serialHighlight ? "#eef2ff" : "transparent",
+                          background:
+                            idx === serialHighlight ? "#eef2ff" : "transparent",
                         }}
                         onClick={() => {
                           applySerialToLine(serialModal.lineId, s);
@@ -4320,8 +4427,12 @@ export default function Pos() {
                       </li>
                     ))}
                   {serialOptions.filter((s) =>
-                    (s.SerialNumber || "").toLowerCase().includes(serialSearch.toLowerCase())
-                  ).length === 0 && <li className="muted small list-row">No serials</li>}
+                    (s.SerialNumber || "")
+                      .toLowerCase()
+                      .includes(serialSearch.toLowerCase())
+                  ).length === 0 && (
+                    <li className="muted small list-row">No serials</li>
+                  )}
                 </ul>
               </>
             )}
@@ -4357,17 +4468,17 @@ export default function Pos() {
                 </li>
               ))}
             </ul>
-              <button
-                className="btn ghost"
-                onClick={() => {
-                  setCustomerModal(false);
-                  focusSearchSoon();
-                }}
-              >
-                Close
-              </button>
-            </div>
+            <button
+              className="btn ghost"
+              onClick={() => {
+                setCustomerModal(false);
+                focusSearchSoon();
+              }}
+            >
+              Close
+            </button>
           </div>
+        </div>
       )}
 
       {employeeModal && (
@@ -4390,17 +4501,17 @@ export default function Pos() {
                 </li>
               ))}
             </ul>
-              <button
-                className="btn ghost"
-                onClick={() => {
-                  setEmployeeModal(false);
-                  focusSearchSoon();
-                }}
-              >
-                Close
-              </button>
-            </div>
+            <button
+              className="btn ghost"
+              onClick={() => {
+                setEmployeeModal(false);
+                focusSearchSoon();
+              }}
+            >
+              Close
+            </button>
           </div>
+        </div>
       )}
       {paymentModal && (
         <div className="modal">
@@ -4861,4 +4972,3 @@ export default function Pos() {
     </div>
   );
 }
-

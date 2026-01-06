@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/http";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
@@ -59,6 +60,7 @@ export default function InventoryPage() {
   const [plainMax, setPlainMax] = useState("");
   const [addToExisting, setAddToExisting] = useState(false);
   const [stagedEntries, setStagedEntries] = useState([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     document.title = t("inventory.title");
@@ -330,6 +332,7 @@ export default function InventoryPage() {
       setStockHighlight(-1);
     }
   };
+
 
   const processStagedEntries = async () => {
     if (!stagedEntries.length) return;
@@ -670,6 +673,9 @@ export default function InventoryPage() {
           <button className="btn ghost">{t("inventory.export")}</button>
           <button className="btn ghost" onClick={openStockModal}>
             Add stock / lots
+          </button>
+          <button className="btn ghost" onClick={() => navigate("/inventory/transfer")}>
+            {t("inventory.transfer")}
           </button>
           <button className="btn primary" onClick={handleSave} disabled={saving}>
             {saving ? t("inventory.saving") : t("inventory.save")}
@@ -1254,6 +1260,7 @@ export default function InventoryPage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }
