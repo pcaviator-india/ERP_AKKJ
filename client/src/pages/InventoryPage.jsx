@@ -4,7 +4,16 @@ import api from "../api/http";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 
-const apiBase = import.meta.env.VITE_API_URL || "http://localhost:4000";
+const resolveApiBase = () => {
+  if (typeof window === "undefined") return "http://localhost:4000";
+  const { protocol, hostname, port, origin } = window.location;
+  if (port === "5173" && (hostname === "localhost" || hostname === "127.0.0.1")) {
+    return `${protocol}//${hostname}:4000`;
+  }
+  return origin;
+};
+
+const apiBase = import.meta.env.VITE_API_URL || resolveApiBase();
 const resolveImg = (url) => {
   if (!url) return "";
   if (/^https?:\/\//i.test(url)) return url;

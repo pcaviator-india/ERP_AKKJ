@@ -4,8 +4,18 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "setup:local": "powershell -ExecutionPolicy Bypass -File ./scripts/install-local.ps1",
+    "setup:local:run": "powershell -ExecutionPolicy Bypass -File ./scripts/install-local.ps1 -RunApp",
+    "setup:local:auto": "powershell -ExecutionPolicy Bypass -File ./scripts/install-local.ps1 -AutoInstallTools",
+    "setup:local:auto:run": "powershell -ExecutionPolicy Bypass -File ./scripts/install-local.ps1 -AutoInstallTools -RunApp",
+    "setup:local:native": "powershell -ExecutionPolicy Bypass -File ./scripts/install-local-native.ps1",
+    "setup:local:native:run": "powershell -ExecutionPolicy Bypass -File ./scripts/install-local-native.ps1 -RunApp",
+    "setup:local:native:auto": "powershell -ExecutionPolicy Bypass -File ./scripts/install-local-native.ps1 -AutoInstallTools",
+    "setup:local:native:auto:run": "powershell -ExecutionPolicy Bypass -File ./scripts/install-local-native.ps1 -AutoInstallTools -RunApp",
     "test": "jest --runInBand",
     "dev": "nodemon src/server.js",
+    "dev:client": "npm --prefix client run dev",
+    "dev:both": "concurrently -k -n API,WEB -c cyan,magenta \"npm run dev\" \"npm run dev:client\"",
     "start": "node src/server.js"
   },
   "keywords": [],
@@ -28,6 +38,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "jest": "^30.2.0",
     "nodemon": "^3.1.11",
     "supertest": "^7.1.4"

@@ -49,6 +49,49 @@ Modern ERP/POS stack with promotions, inventory, sales tickets, customers, produ
    cd client && npm run dev   # frontend at http://localhost:5173
    ```
 
+## One-Command Local Install (Friend Test)
+
+### Option A: Docker (Requires virtualization enabled)
+
+Use when setting up on a fresh Windows machine with Docker Desktop.
+
+1. Place schema dump at `schema/Dump20260319.sql` (already included).
+2. Run from project root:
+   ```bash
+   npm run setup:local:auto:run
+   ```
+
+**Preflight:**
+- Node v18+, npm, Docker Desktop, Docker Compose
+- All can be auto-installed via winget
+- Requires **CPU virtualization (Hyper-V) enabled in BIOS**
+
+### Option B: Native MySQL (No Docker, no virtualization needed)
+
+Use when Docker is not available or virtualization can't be enabled.
+
+1. Place schema dump at `schema/Dump20260319.sql` (already included).
+2. Run from project root:
+   ```bash
+   npm run setup:local:native:auto:run
+   ```
+
+**Preflight:**
+- Node v18+, npm, MySQL Server
+- All can be auto-installed via winget
+- MySQL installs as a Windows service locally
+
+### Setup Scripts Summary
+
+| Command | Method | Auto-Install | Start App |
+|---------|--------|--------------|----------|
+| `npm run setup:local` | Docker | ❌ | ❌ |
+| `npm run setup:local:auto` | Docker | ✅ | ❌ |
+| `npm run setup:local:auto:run` | Docker | ✅ | ✅ |
+| `npm run setup:local:native` | MySQL | ❌ | ❌ |
+| `npm run setup:local:native:auto` | MySQL | ✅ | ❌ |
+| `npm run setup:local:native:auto:run` | MySQL | ✅ | ✅ |
+
 ## Core Workflows
 
 - **Create Promotion**: `/promotions/new` page supports percent/amount/unit-price; scopes; limits; schedule. Unit-price sets effective unit price for matching lines.

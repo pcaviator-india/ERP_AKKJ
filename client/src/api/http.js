@@ -1,9 +1,18 @@
 import axios from "axios";
 
+function resolveDefaultApiBase() {
+  if (typeof window === "undefined") return "http://localhost:4000";
+  const { protocol, hostname, port, origin } = window.location;
+  if (port === "5173" && (hostname === "localhost" || hostname === "127.0.0.1")) {
+    return `${protocol}//${hostname}:4000`;
+  }
+  return origin;
+}
+
 const apiBase =
   import.meta.env.VITE_API_URL ||
   import.meta.env.VITE_API_BASE ||
-  "http://localhost:4000";
+  resolveDefaultApiBase();
 
 const api = axios.create({
   baseURL: apiBase,
@@ -43,7 +52,18 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config || {};
     const status = error.response?.status;
-    if (status === 401 && !originalRequest._retry && getRefreshToken) {
+    const requestUrl = (originalRequest.url || "").toLowerCase();
+    const isAuthEndpoint =
+      requestUrl.includes("/api/auth/login") ||
+      requestUrl.includes("/api/auth/refresh") ||
+      requestUrl.includes("/api/onboarding/register");
+
+    if (
+      status === 401 &&
+      !originalRequest._retry &&
+      !isAuthEndpoint &&
+      getRefreshToken
+    ) {
       originalRequest._retry = true;
       try {
         if (!isRefreshing) {
@@ -66,7 +86,7 @@ api.interceptors.response.use(
         isRefreshing = false;
         refreshPromise = null;
         if (onAuthFailure) onAuthFailure();
-        return Promise.reject(refreshErr);
+        return Promise.reject(error);
       }
     }
     return Promise.reject(error);

@@ -1,0 +1,24 @@
+﻿## main...origin/main
+ M API_DOCS.md
+ M README.md
+ M client/package-lock.json
+ M client/package.json
+ M client/src/api/http.js
+ M client/src/pages/CustomerScreen.jsx
+ M client/src/pages/InventoryPage.jsx
+ M client/vite.config.js
+ M package-lock.json
+ M package.json
+ M src/db.js
+ M src/middleware/auth.js
+ M src/server.js
+?? .azure-deploy-info.json
+?? backups/
+?? docker-compose.local.yml
+?? install-app.bat
+?? schema/
+?? scripts/
+?? start-app.bat
+?? start-production.bat
+?? stop-backend.bat
+?? sync-to-share-folder.bat

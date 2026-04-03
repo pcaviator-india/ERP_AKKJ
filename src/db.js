@@ -1,5 +1,26 @@
 const mysql = require("mysql2/promise");
-require("dotenv").config();
+const path = require("path");
+const fs = require("fs");
+
+const envCandidates = [];
+if (process.env.ERP_AKKJ_ENV_PATH) {
+  envCandidates.push(process.env.ERP_AKKJ_ENV_PATH);
+}
+if (process.platform === "win32" && process.env.ProgramData) {
+  envCandidates.push(path.join(process.env.ProgramData, "Pcaviator", "ERP AKKJ", ".env"));
+}
+envCandidates.push(path.join(__dirname, "..", ".env"));
+
+for (const envPath of envCandidates) {
+  if (envPath && fs.existsSync(envPath)) {
+    require("dotenv").config({ path: envPath });
+    break;
+  }
+}
+
+if (!process.env.MYSQL_DATABASE && fs.existsSync(path.join(__dirname, "..", ".env"))) {
+  require("dotenv").config({ path: path.join(__dirname, "..", ".env"), override: false });
+}
 
 function parseUrl(urlString = "") {
   try {

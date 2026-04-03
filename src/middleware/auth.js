@@ -16,7 +16,9 @@ function authMiddleware(req, res, next) {
     req.user = decoded;
     next();
   } catch (err) {
-    console.error("JWT verify error:", err);
+    if (err?.name !== "TokenExpiredError") {
+      console.error("JWT verify error:", err);
+    }
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 }

@@ -1,0 +1,1106 @@
+﻿diff --git a/API_DOCS.md b/API_DOCS.md
+index 476b620..192aee9 100644
+--- a/API_DOCS.md
++++ b/API_DOCS.md
+@@ -1,3 +1,577 @@
++# ERP / POS API Catalog
++
++> Base URL: http://localhost:4000 (replace with the appropriate environment hostname).
++
++All endpoints are JSON over HTTPS unless stated. Every request (except onboarding and login) must supply an Authorization header:
++
++```
++Authorization: Bearer <access-token>
++```
++
++Tokens are issued by POST /api/auth/login or POST /api/auth/refresh. Company scoping is enforced automatically from the authenticated user.
++
++---
++
++## Authentication & Session
++
++| Method | Path | Description |
++| --- | --- | --- |
++| POST | /api/auth/login | Exchange email/password for access and refresh tokens. |
++| POST | /api/auth/refresh | Refresh access token using a refresh token. |
++| POST | /api/auth/register | Register an employee (CompanyAdmin/SuperAdmin only). |
++| POST | /api/auth/set-pin | Set or reset employee POS PIN. |
++| POST | /api/auth/verify-pin | Validate POS override PIN. |
++| GET | /api/auth/me | Return current employee profile and permissions. |
++
++**Login example**
++
++```
++POST /api/auth/login
++{
++  "Email": "cashier@demo.cl",
++  "Password": "demo1234"
++}
++
++Response 200
++{
++  "token": "<JWT>",
++  "refreshToken": "<JWT>"
++}
++```
++
++---
++
++## Onboarding
++
++| Method | Path | Description |
++| --- | --- | --- |
++| POST | /api/onboarding/register | Self-service tenant + admin creation. |
++
++**Payload sample**
++
++```
++{
++  "CompanyName": "Comercial Ejemplo",
++  "AdminFirstName": "Ana",
++  "AdminLastName": "Soto",
++  "AdminEmail": "ana@example.com",
++  "Password": "DemoPass!123"
++}
++```
++
++---
++
++## Company Configuration
++
++| Method | Path | Description |
++| --- | --- | --- |
++| GET | /api/companies | List company records (admin only). |
++| GET | /api/companies/:id | Retrieve company profile. |
++| POST | /api/companies | Create company (SuperAdmin). |
++| PUT | /api/companies/:id | Update company fields. |
++| DELETE | /api/companies/:id | Deactivate company. |
++| GET | /api/config | Fetch tenant configuration bundle. |
++| PATCH | /api/config | Update POS/config store settings. |
++
++**Config update example**
++
++```
++PATCH /api/config
++{
++  "updates": {
++    "pos": {
++      "documentType": "BOLETA",
++      "receiptFooter": "Gracias por su compra"
++    }
++  }
++}
++```
++
++---
++
++## Users, Roles & Permissions
++
++| Method | Path | Description |
++| --- | --- | --- |
++| GET | /api/employees | List employees for the company. |
++| PUT | /api/employees/:id | Update employee profile or password. |
++| DELETE | /api/employees/:id | Archive employee (IsActive = 0). |
++| GET | /api/roles | List available roles. |
++| POST | /api/roles | Create a role (requires roles.manage). |
++| PUT | /api/roles/:id | Update role fields. |
++| DELETE | /api/roles/:id | Delete role. |
++| GET | /api/roles/:id/permissions | Get role permissions. |
++| PUT | /api/roles/:id/permissions | Replace role permissions. |
++
++**Role payload example**
++
++```
++POST /api/roles
++{
++  "RoleName": "StoreManager",
++  "Description": "POS supervisor"
++}
++```
++
++---
++
++## Catalog Management
++
++### Products
++
++| Method | Path | Description |
++| --- | --- | --- |
++| GET | /api/products | List products (supports filters via query string). |
++| POST | /api/products | Create product. |
++| GET | /api/products/:id | Retrieve product with pricing and stock. |
++| PUT | /api/products/:id | Update product. |
++| DELETE | /api/products/:id | Delete product. |
++| POST | /api/products/import/images | Bulk image upload (multipart). |
++| POST | /api/products/import/preview | Validate import manifest. |
++| POST | /api/products/import/commit | Commit preview import. |
++| GET | /api/products/export | Export catalog (CSV/XLSX). |
++| GET | /api/products/:id/images | List images. |
++| POST | /api/products/:id/images | Add images. |
++| PUT | /api/products/:id/images/:imageId | Update image metadata. |
++| DELETE | /api/products/:id/images/:imageId | Remove image. |
++
++**Create product example**
++
++```
++{
++  "SKU": "SKU-1001",
++  "ProductName": "Cafe Grano 1kg",
++  "UnitID": 1,
++  "ProductCategoryID": 3,
++  "SellingPrice": 9990,
++  "CostPrice": 6500,
++  "IsTaxable": 1,
++  "TaxRateID": 1,
++  "UsesLots": 0,
++  "UsesSerials": 0,
++  "Barcode": "7800000000010"
++}
++```
++
++### Categories, Brands, Units
++
++| Method | Path | Description |
++| --- | --- | --- |
++| GET | /api/categories | List categories. |
++| POST | /api/categories | Create category. |
++| PUT | /api/categories/:id | Update category. |
++| DELETE | /api/categories/:id | Delete category. |
++| GET | /api/brands | List brands. |
++| POST | /api/brands | Create brand. |
++| PUT | /api/brands/:id | Update brand. |
++| DELETE | /api/brands/:id | Soft-delete brand. |
++| GET | /api/units | List units of measure. |
++| POST | /api/units | Create unit. |
++
++### Custom Fields & Metadata
++
++| Method | Path | Description |
++| --- | --- | --- |
++| GET | /api/custom-fields/product | List product custom field definitions. |
++| POST | /api/custom-fields/product/bulk | Bulk upsert definitions. |
++| DELETE | /api/custom-fields/product/:id | Delete definition. |
++| GET | /api/custom-fields/product/values | Get values for a product (requires productId query). |
++| POST | /api/custom-fields/product/values | Upsert values for a product. |
++| POST | /api/custom-fields/product/stage-values | Stage values before product exists. |
++| GET | /api/custom-fields/product/stage-values | List staged values (token query). |
++| POST | /api/custom-fields/product/attach-staged | Attach staged values to product. |
++
++### Pricing Tools
++
++| Method | Path | Description |
++| --- | --- | --- |
++| GET | /api/price-lists | List price lists. |
++| POST | /api/price-lists | Create price list. |
++| PUT | /api/price-lists/:id | Update price list header. |
++| GET | /api/price-lists/:id/items | Fetch price overrides. |
++| PUT | /api/price-lists/:id/items | Replace price override list. |
++| GET | /api/tax-rates | List tax rates. |
++| POST | /api/tax-rates | Create tax rate. |
++| PUT | /api/tax-rates/:id | Update tax rate. |
++| PUT | /api/tax-rates/:id/default | Mark default tax rate. |
++
++**Price list example**
++
++```
++{
++  "Name": "Mayoristas",
++  "Currency": "CLP",
++  "Items": [
++    { "ProductID": 10, "Price": 5500 },
++    { "ProductID": 12, "Price": 3200 }
++  ]
++}
++```
++
++### Promotions
++
++| Method | Path | Description |
++| --- | --- | --- |
++| GET | /api/promotions | List promotions. |
++| POST | /api/promotions | Create promotion. |
++| PATCH | /api/promotions/:id | Update promotion. |
++| DELETE | /api/promotions/:id | Delete promotion. |
++
++**Promotion payload**
++
++```
++{
++  "name": "Navidad 10",
++  "code": "NAV10",
++  "type": "percent",
++  "value": 10,
++  "unitPrice": null,
++  "priority": 100,
++  "enabled": true,
++  "stackable": true,
++  "scopes": {
++    "products": ["Cafe Grano 1kg"],
++    "channels": ["POS"]
++  }
++}
++```
++
++### Packs, Lots, Serials
++
++| Method | Path | Description |
++| --- | --- | --- |
++| GET | /api/product-packs | List pack definitions. |
++| GET | /api/product-packs/:packProductId | Retrieve pack detail. |
++| POST | /api/product-packs | Create pack. |
++| PUT | /api/product-packs/:packProductId | Update pack. |
++| DELETE | /api/product-packs/:packProductId | Delete pack. |
++| GET | /api/product-lots | List lots (filter by productId, warehouseId). |
++| GET | /api/product-lots/fefo | Fetch FEFO lot recommendation. |
++| POST | /api/product-lots | Create or update lot inventory. |
++| PUT | /api/product-lots/:lotId | Update lot details/inventory. |
++| GET | /api/product-serials | List serial numbers (filterable). |
++| POST | /api/product-serials/intake | Intake serial numbers and adjust inventory. |
++
++---
++
++## Warehouses & Inventory
++
++| Method | Path | Description |
++| --- | --- | --- |
++| GET | /api/warehouses | List warehouses. |
++| POST | /api/warehouses | Create warehouse. |
++| PUT | /api/warehouses/:id | Update warehouse. |
++| DELETE | /api/warehouses/:id | Delete warehouse. |
++| GET | /api/inventory/levels | Query inventory levels (supports productId, warehouseId). |
++| POST | /api/inventory/levels/bulk-save | Bulk override inventory levels. |
++| POST | /api/inventory/transfer | Transfer stock between warehouses. |
++| POST | /api/inventory/adjust | Manual adjustment (+/-). |
++
++**Transfer example**
++
++```
++{
++  "ProductID": 10,
++  "FromWarehouseID": 1,
++  "ToWarehouseID": 2,
++  "Quantity": 5,
++  "Reason": "Replenish store",
++  "ProductLotID": null
++}
++```
++
++### Inbound Logistics
++
++| Method | Path | Description |
++| --- | --- | --- |
++| GET | /api/goods-receipts | List goods receipts. |
++| GET | /api/goods-receipts/:id | View receipt. |
++| POST | /api/goods-receipts | Create goods receipt. |
++| GET | /api/purchase-orders | List purchase orders. |
++| GET | /api/purchase-orders/:id | Retrieve purchase order. |
++| POST | /api/purchase-orders | Create purchase order. |
++| PUT | /api/purchase-orders/:id | Update purchase order. |
++| DELETE | /api/purchase-orders/:id | Cancel purchase order. |
++| GET | /api/direct-purchases | List direct purchases. |
++| GET | /api/direct-purchases/:id | Retrieve direct purchase. |
++| POST | /api/direct-purchases | Create direct purchase. |
++| PUT | /api/direct-purchases/:id | Update direct purchase. |
++| DELETE | /api/direct-purchases/:id | Delete direct purchase. |
++
++---
++
++## Suppliers & Purchasing
++
++| Method | Path | Description |
++| --- | --- | --- |
++| GET | /api/suppliers | List suppliers. |
++| GET | /api/suppliers/:id | Supplier detail. |
++| POST | /api/suppliers | Create supplier. |
++| PUT | /api/suppliers/:id | Update supplier. |
++| DELETE | /api/suppliers/:id | Archive supplier. |
++| GET | /api/supplier-invoices | List supplier invoices. |
++| GET | /api/supplier-invoices/:id | Supplier invoice detail. |
++| GET | /api/supplier-invoices/by-supplier/:supplierId | Invoices per supplier. |
++| GET | /api/supplier-invoices/summary | Invoice summary. |
++| POST | /api/supplier-invoices | Create supplier invoice. |
++| GET | /api/supplier-payments | List supplier payments. |
++| GET | /api/supplier-payments/:id | Supplier payment detail. |
++| POST | /api/supplier-payments | Create supplier payment. |
++
++**Supplier payment example**
++
++```
++{
++  "SupplierID": 5,
++  "Amount": 120000,
++  "PaymentMethodID": 2,
++  "Reference": "TRANSFER-123",
++  "PaymentDate": "2026-01-15"
++}
++```
++
++---
++
++## Sales & POS
++
++| Method | Path | Description |
++| --- | --- | --- |
++| GET | /api/sales | List sales documents. |
++| GET | /api/sales/:id | Retrieve sale header/items/payments. |
++| POST | /api/sales | Create sale/invoice (inventory out). |
++| POST | /api/sales/tickets | Create or update POS ticket (stored as COTIZACION). |
++| GET | /api/sales/tickets | List tickets (filters: status, intendedDoc). |
++| GET | /api/sales/tickets/:id | Ticket detail. |
++| GET | /api/sales/tickets/by-number/:docNumber | Ticket lookup by number. |
++| POST | /api/sales/tickets/:id/convert | Convert ticket to legal document. |
++| POST | /api/sales/tickets/:id/mark-billed | Mark ticket as billed externally. |
++| DELETE | /api/sales/tickets/:id | Delete ticket. |
++| POST | /api/customer-screen/broadcast | Push POS cart to customer display channel. |
++
++**Sale payload (BOLETA)**
++
++```
++{
++  "CustomerID": 123,
++  "WarehouseID": 1,
++  "DocumentType": "BOLETA",
++  "Items": [
++    {
++      "ProductID": 10,
++      "Quantity": 2,
++      "UnitPrice": 4990,
++      "DiscountPercentage": 0,
++      "TaxRateID": 1,
++      "TaxRatePercentage": 19,
++      "IsLineExenta": 0
++    }
++  ],
++  "Payments": [
++    { "PaymentMethodID": 1, "Amount": 9980 }
++  ]
++}
++```
++
++### Accounts Receivable
++
++| Method | Path | Description |
++| --- | --- | --- |
++| GET | /api/ar/customers/summary | Outstanding balance per customer. |
++| GET | /api/ar/customers/:customerId/invoices | Customer invoice list. |
++| GET | /api/ar/invoices/:saleId | Invoice detail with items/payments. |
++| POST | /api/ar/invoices/:saleId/pay | Record payment against invoice. |
++
++**AR payment example**
++
++```
++POST /api/ar/invoices/250/pay
++{
++  "Amount": 150000,
++  "PaymentMethodID": 3,
++  "ReferenceNumber": "DEP-456",
++  "PaymentDate": "2026-01-15"
++}
++```
++
++### Credits, Debits, Guia de Despacho
++
++| Method | Path | Description |
++| --- | --- | --- |
++| POST | /api/sales/credit-note | Create credit note (NOTA_CREDITO). |
++| GET | /api/sales/credit-note/:ncId | Credit note detail. |
++| GET | /api/sales/:saleId/credit-notes | Credit notes linked to sale. |
++| POST | /api/sales/debit-note | Create debit note (NOTA_DEBITO). |
++| GET | /api/sales/debit-note/:ndId | Debit note detail. |
++| GET | /api/sales/:saleId/debit-notes | Debit notes linked to sale. |
++| POST | /api/sales/guia-despacho | Create Guia de Despacho (inventory out). |
++
++**Credit note sample**
++
++```
++{
++  "OriginalSaleID": 2001,
++  "WarehouseID": 1,
++  "DocumentNumber": "NC-1001",
++  "Items": [
++    {
++      "ProductID": 10,
++      "Quantity": 1,
++      "UnitPrice": 4990,
++      "ProductLotID": null
++    }
++  ],
++  "Notes": "Devolucion producto defectuoso"
++}
++```
++
++### Document Sequences
++
++| Method | Path | Description |
++| --- | --- | --- |
++| GET | /api/document-sequences | List document sequences. |
++| GET | /api/document-sequences/:id | Sequence detail. |
++| POST | /api/document-sequences | Create sequence. |
++| PUT | /api/document-sequences/:id | Update sequence. |
++| DELETE | /api/document-sequences/:id | Delete sequence. |
++
++---
++
++## Payments & Banking
++
++| Method | Path | Description |
++| --- | --- | --- |
++| GET | /api/payment-methods | List payment methods. |
++| GET | /api/payment-methods/:id | Payment method detail. |
++| POST | /api/payment-methods | Create payment method. |
++| PUT | /api/payment-methods/:id | Update payment method. |
++| DELETE | /api/payment-methods/:id | Delete payment method. |
++| GET | /api/bank-accounts | List bank accounts. |
++| GET | /api/bank-accounts/:id | Bank account detail. |
++| POST | /api/bank-accounts | Create bank account. |
++| PUT | /api/bank-accounts/:id | Update account. |
++| DELETE | /api/bank-accounts/:id | Deactivate account. |
++
++**Bank account example**
++
++```
++{
++  "GLAccountID": 5101,
++  "AccountName": "Banco Estado Corriente",
++  "AccountNumber": "123-456-789",
++  "CurrencyID": 1,
++  "BankName": "Banco Estado",
++  "IsActive": 1
++}
++```
++
++---
++
++## Reporting & Analytics
++
++| Method | Path | Description |
++| --- | --- | --- |
++| GET | /api/reports/sources | List available data sources. |
++| GET | /api/reports/templates | List report templates. |
++| GET | /api/reports/recent | Recent report runs. |
++| GET | /api/reports/schedules | Scheduled reports. |
++| POST | /api/reports/schedules | Create schedule. |
++| PUT | /api/reports/schedules/:id | Replace schedule. |
++| PATCH | /api/reports/schedules/:id | Partial update schedule. |
++| DELETE | /api/reports/schedules/:id | Remove schedule. |
++| POST | /api/reports/export | Export dataset (csv, xlsx, json, pdf). |
++| POST | /api/reports/preview | Build dataset preview (internal use). |
++
++**Export example**
++
++```
++POST /api/reports/export
++{
++  "source": "sales-summary",
++  "exportFormat": "xlsx",
++  "filters": [
++    { "column": "CompanyID", "operator": "=", "value": 5 }
++  ],
++  "pageSize": 500
++}
++```
++
++---
++
++## OCR & Document Parsing
++
++| Method | Path | Description |
++| --- | --- | --- |
++| POST | /api/ocr/parse-invoice | OCR parse invoice image (base64 or URL). |
++| POST | /api/ocr/parse-invoice-with-products | OCR plus product matching. |
++| POST | /api/ocr/parse-invoice-xml | Parse SII XML invoice. |
++
++**Invoice OCR example**
++
++```
++POST /api/ocr/parse-invoice
++{
++  "image": "data:image/png;base64,iVBORw0KG..."
++}
++```
++
++---
++
++## Upload Services
++
++| Method | Path | Description |
++| --- | --- | --- |
++| POST | /api/uploads/products | Upload product image (PNG/JPG, 5 MB max). |
++| POST | /api/uploads/purchases | Upload purchase attachment (image/PDF, 10 MB max). |
++
++---
++
++## Miscellaneous Utilities
++
++| Method | Path | Description |
++| --- | --- | --- |
++| GET | /api/ar | Accounts receivable (see AR section). |
++| GET | /api/customer-groups | List customer groups. |
++| POST | /api/customer-groups | Create group. |
++| PUT | /api/customer-groups/:id | Update group. |
++| DELETE | /api/customer-groups/:id | Delete group. |
++| GET | /api/customers | List customers. |
++| GET | /api/customers/:id | Customer detail. |
++| POST | /api/customers | Create customer. |
++| PUT | /api/customers/:id | Update customer. |
++| DELETE | /api/customers/:id | Delete customer. |
++| GET | /api/customer-screen/broadcast | (see POS section) |
++| GET | /api/onboarding/register | See onboarding section. |
++
++**Customer example**
++
++```
++{
++  "CustomerName": "Acme SA",
++  "Email": "ventas@acme.cl",
++  "Phone": "+56 9 1234 5678",
++  "TaxID": "76.543.210-9",
++  "Address": "Av. Central 123, Santiago",
++  "GroupIDs": [1]
++}
++```
++
++---
++
++## Error & Pagination Conventions
++
++* Validation failures return 400 with `{ "error": "message" }`.
++* Authentication failures return 401; authorization failures return 403.
++* Record not found returns 404 with `{ "error": "..." }`.
++* Many listing endpoints accept `page`, `limit`, or filter query parameters (refer to individual route implementations for specifics).
++
++---
++
++## Change Log
++
++| Date | Description |
++| --- | --- |
++| 2026-01-21 | Initial comprehensive catalog for tenant distribution. |
++
+ # API Reference (ERP / POS / Promotions)
+ 
+ Base URL: `http://localhost:4000` (adjust per environment). All endpoints require authentication and return JSON unless noted. Field names follow backend models (e.g., `ProductID`, `ProductName`).
+diff --git a/README.md b/README.md
+index ebb4475..2c9bd28 100644
+--- a/README.md
++++ b/README.md
+@@ -49,6 +49,49 @@ Modern ERP/POS stack with promotions, inventory, sales tickets, customers, produ
+    cd client && npm run dev   # frontend at http://localhost:5173
+    ```
+ 
++## One-Command Local Install (Friend Test)
++
++### Option A: Docker (Requires virtualization enabled)
++
++Use when setting up on a fresh Windows machine with Docker Desktop.
++
++1. Place schema dump at `schema/Dump20260319.sql` (already included).
++2. Run from project root:
++   ```bash
++   npm run setup:local:auto:run
++   ```
++
++**Preflight:**
++- Node v18+, npm, Docker Desktop, Docker Compose
++- All can be auto-installed via winget
++- Requires **CPU virtualization (Hyper-V) enabled in BIOS**
++
++### Option B: Native MySQL (No Docker, no virtualization needed)
++
++Use when Docker is not available or virtualization can't be enabled.
++
++1. Place schema dump at `schema/Dump20260319.sql` (already included).
++2. Run from project root:
++   ```bash
++   npm run setup:local:native:auto:run
++   ```
++
++**Preflight:**
++- Node v18+, npm, MySQL Server
++- All can be auto-installed via winget
++- MySQL installs as a Windows service locally
++
++### Setup Scripts Summary
++
++| Command | Method | Auto-Install | Start App |
++|---------|--------|--------------|----------|
++| `npm run setup:local` | Docker | ÔØî | ÔØî |
++| `npm run setup:local:auto` | Docker | Ô£à | ÔØî |
++| `npm run setup:local:auto:run` | Docker | Ô£à | Ô£à |
++| `npm run setup:local:native` | MySQL | ÔØî | ÔØî |
++| `npm run setup:local:native:auto` | MySQL | Ô£à | ÔØî |
++| `npm run setup:local:native:auto:run` | MySQL | Ô£à | Ô£à |
++
+ ## Core Workflows
+ 
+ - **Create Promotion**: `/promotions/new` page supports percent/amount/unit-price; scopes; limits; schedule. Unit-price sets effective unit price for matching lines.
+diff --git a/client/package-lock.json b/client/package-lock.json
+index bbbacac..a5f52ed 100644
+--- a/client/package-lock.json
++++ b/client/package-lock.json
+@@ -9,6 +9,7 @@
+       "version": "0.0.0",
+       "dependencies": {
+         "axios": "^1.13.2",
++        "erp_akkj": "file:..",
+         "phosphor-react": "^1.4.1",
+         "quill": "^2.0.2",
+         "react": "^19.2.0",
+@@ -28,6 +29,31 @@
+         "vite": "^7.2.4"
+       }
+     },
++    "..": {
++      "name": "erp_akkj",
++      "version": "1.0.0",
++      "license": "ISC",
++      "dependencies": {
++        "bcryptjs": "^3.0.3",
++        "cors": "^2.8.5",
++        "dotenv": "^17.2.3",
++        "escape-string-regexp": "^4.0.0",
++        "exceljs": "^4.4.0",
++        "express": "^5.1.0",
++        "jsonwebtoken": "^9.0.2",
++        "multer": "^1.4.5-lts.1",
++        "mysql2": "^3.15.3",
++        "pdfkit": "^0.15.2",
++        "tmpl": "^1.0.5",
++        "tslib": "^2.8.1",
++        "ws": "^8.18.0"
++      },
++      "devDependencies": {
++        "jest": "^30.2.0",
++        "nodemon": "^3.1.11",
++        "supertest": "^7.1.4"
++      }
++    },
+     "node_modules/@babel/code-frame": {
+       "version": "7.27.1",
+       "resolved": "https://registry.npmmirror.com/@babel/code-frame/-/code-frame-7.27.1.tgz",
+@@ -1804,6 +1830,10 @@
+       "dev": true,
+       "license": "ISC"
+     },
++    "node_modules/erp_akkj": {
++      "resolved": "..",
++      "link": true
++    },
+     "node_modules/es-define-property": {
+       "version": "1.0.1",
+       "resolved": "https://registry.npmmirror.com/es-define-property/-/es-define-property-1.0.1.tgz",
+diff --git a/client/package.json b/client/package.json
+index 8b8613c..4a53ccd 100644
+--- a/client/package.json
++++ b/client/package.json
+@@ -11,6 +11,7 @@
+   },
+   "dependencies": {
+     "axios": "^1.13.2",
++    "erp_akkj": "file:..",
+     "phosphor-react": "^1.4.1",
+     "quill": "^2.0.2",
+     "react": "^19.2.0",
+diff --git a/client/src/api/http.js b/client/src/api/http.js
+index e837c7f..6c8a885 100644
+--- a/client/src/api/http.js
++++ b/client/src/api/http.js
+@@ -1,9 +1,18 @@
+ import axios from "axios";
+ 
++function resolveDefaultApiBase() {
++  if (typeof window === "undefined") return "http://localhost:4000";
++  const { protocol, hostname, port, origin } = window.location;
++  if (port === "5173" && (hostname === "localhost" || hostname === "127.0.0.1")) {
++    return `${protocol}//${hostname}:4000`;
++  }
++  return origin;
++}
++
+ const apiBase =
+   import.meta.env.VITE_API_URL ||
+   import.meta.env.VITE_API_BASE ||
+-  "http://localhost:4000";
++  resolveDefaultApiBase();
+ 
+ const api = axios.create({
+   baseURL: apiBase,
+@@ -43,7 +52,18 @@ api.interceptors.response.use(
+   async (error) => {
+     const originalRequest = error.config || {};
+     const status = error.response?.status;
+-    if (status === 401 && !originalRequest._retry && getRefreshToken) {
++    const requestUrl = (originalRequest.url || "").toLowerCase();
++    const isAuthEndpoint =
++      requestUrl.includes("/api/auth/login") ||
++      requestUrl.includes("/api/auth/refresh") ||
++      requestUrl.includes("/api/onboarding/register");
++
++    if (
++      status === 401 &&
++      !originalRequest._retry &&
++      !isAuthEndpoint &&
++      getRefreshToken
++    ) {
+       originalRequest._retry = true;
+       try {
+         if (!isRefreshing) {
+@@ -66,7 +86,7 @@ api.interceptors.response.use(
+         isRefreshing = false;
+         refreshPromise = null;
+         if (onAuthFailure) onAuthFailure();
+-        return Promise.reject(refreshErr);
++        return Promise.reject(error);
+       }
+     }
+     return Promise.reject(error);
+diff --git a/client/src/pages/CustomerScreen.jsx b/client/src/pages/CustomerScreen.jsx
+index 8644d55..8ce6e8a 100644
+--- a/client/src/pages/CustomerScreen.jsx
++++ b/client/src/pages/CustomerScreen.jsx
+@@ -8,6 +8,15 @@ const money = (val) =>
+     minimumFractionDigits: 0,
+   }).format(Number(val || 0));
+ 
++const resolveApiBase = () => {
++  if (typeof window === "undefined") return "http://localhost:4000";
++  const { protocol, hostname, port, origin } = window.location;
++  if (port === "5173" && (hostname === "localhost" || hostname === "127.0.0.1")) {
++    return `${protocol}//${hostname}:4000`;
++  }
++  return origin;
++};
++
+ export default function CustomerScreen() {
+   const params = new URLSearchParams(window.location.search);
+   const channel = params.get("channel") || "default";
+@@ -17,7 +26,9 @@ export default function CustomerScreen() {
+   const wsRef = useRef(null);
+ 
+   useEffect(() => {
+-    const apiBase = import.meta.env.VITE_API_URL || "http://localhost:4000";
++    const apiBase =
++      import.meta.env.VITE_API_URL ||
++      resolveApiBase();
+     const wsUrl = apiBase.replace(/^http/i, "ws") + `/customer-screen?channel=${encodeURIComponent(channel)}`;
+     const ws = new WebSocket(wsUrl);
+     wsRef.current = ws;
+diff --git a/client/src/pages/InventoryPage.jsx b/client/src/pages/InventoryPage.jsx
+index ace8152..99cc58a 100644
+--- a/client/src/pages/InventoryPage.jsx
++++ b/client/src/pages/InventoryPage.jsx
+@@ -4,7 +4,16 @@ import api from "../api/http";
+ import { useAuth } from "../context/AuthContext";
+ import { useLanguage } from "../context/LanguageContext";
+ 
+-const apiBase = import.meta.env.VITE_API_URL || "http://localhost:4000";
++const resolveApiBase = () => {
++  if (typeof window === "undefined") return "http://localhost:4000";
++  const { protocol, hostname, port, origin } = window.location;
++  if (port === "5173" && (hostname === "localhost" || hostname === "127.0.0.1")) {
++    return `${protocol}//${hostname}:4000`;
++  }
++  return origin;
++};
++
++const apiBase = import.meta.env.VITE_API_URL || resolveApiBase();
+ const resolveImg = (url) => {
+   if (!url) return "";
+   if (/^https?:\/\//i.test(url)) return url;
+diff --git a/client/vite.config.js b/client/vite.config.js
+index 8b0f57b..36f0b16 100644
+--- a/client/vite.config.js
++++ b/client/vite.config.js
+@@ -4,4 +4,21 @@ import react from '@vitejs/plugin-react'
+ // https://vite.dev/config/
+ export default defineConfig({
+   plugins: [react()],
++  build: {
++    rollupOptions: {
++      output: {
++        manualChunks(id) {
++          if (!id.includes('node_modules')) return
++          if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
++            return 'vendor-react'
++          }
++          if (id.includes('xlsx')) {
++            return 'vendor-xlsx'
++          }
++          return 'vendor'
++        },
++      },
++    },
++    chunkSizeWarningLimit: 800,
++  },
+ })
+diff --git a/package-lock.json b/package-lock.json
+index 5dd213e..f607bf6 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -24,6 +24,7 @@
+         "ws": "^8.18.0"
+       },
+       "devDependencies": {
++        "concurrently": "^9.2.1",
+         "jest": "^30.2.0",
+         "nodemon": "^3.1.11",
+         "supertest": "^7.1.4"
+@@ -2562,6 +2563,57 @@
+         "typedarray": "^0.0.6"
+       }
+     },
++    "node_modules/concurrently": {
++      "version": "9.2.1",
++      "resolved": "https://registry.npmmirror.com/concurrently/-/concurrently-9.2.1.tgz",
++      "integrity": "sha512-fsfrO0MxV64Znoy8/l1vVIjjHa29SZyyqPgQBwhiDcaW8wJc2W3XWVOGx4M3oJBnv/zdUZIIp1gDeS98GzP8Ng==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "chalk": "4.1.2",
++        "rxjs": "7.8.2",
++        "shell-quote": "1.8.3",
++        "supports-color": "8.1.1",
++        "tree-kill": "1.2.2",
++        "yargs": "17.7.2"
++      },
++      "bin": {
++        "conc": "dist/bin/concurrently.js",
++        "concurrently": "dist/bin/concurrently.js"
++      },
++      "engines": {
++        "node": ">=18"
++      },
++      "funding": {
++        "url": "https://github.com/open-cli-tools/concurrently?sponsor=1"
++      }
++    },
++    "node_modules/concurrently/node_modules/has-flag": {
++      "version": "4.0.0",
++      "resolved": "https://registry.npmmirror.com/has-flag/-/has-flag-4.0.0.tgz",
++      "integrity": "sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/concurrently/node_modules/supports-color": {
++      "version": "8.1.1",
++      "resolved": "https://registry.npmmirror.com/supports-color/-/supports-color-8.1.1.tgz",
++      "integrity": "sha512-MpUEN2OodtUzxvKQl72cUF7RQ5EiHsGvSsVG0ia9c5RbWGL2CI4C7EpPS8UTBIplnlzZiNuV56w+FuNxy3ty2Q==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "has-flag": "^4.0.0"
++      },
++      "engines": {
++        "node": ">=10"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/supports-color?sponsor=1"
++      }
++    },
+     "node_modules/content-disposition": {
+       "version": "1.0.0",
+       "resolved": "https://registry.npmmirror.com/content-disposition/-/content-disposition-1.0.0.tgz",
+@@ -6308,6 +6360,16 @@
+         "node": ">= 18"
+       }
+     },
++    "node_modules/rxjs": {
++      "version": "7.8.2",
++      "resolved": "https://registry.npmmirror.com/rxjs/-/rxjs-7.8.2.tgz",
++      "integrity": "sha512-dhKf903U/PQZY6boNNtAGdWbG85WAbjT/1xYoZIC7FAY0yWapOBQVsVrDl58W86//e1VpMNBtRV4MaXfdMySFA==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "tslib": "^2.1.0"
++      }
++    },
+     "node_modules/safe-buffer": {
+       "version": "5.2.1",
+       "resolved": "https://registry.npmmirror.com/safe-buffer/-/safe-buffer-5.2.1.tgz",
+@@ -6484,6 +6546,19 @@
+         "node": ">=8"
+       }
+     },
++    "node_modules/shell-quote": {
++      "version": "1.8.3",
++      "resolved": "https://registry.npmmirror.com/shell-quote/-/shell-quote-1.8.3.tgz",
++      "integrity": "sha512-ObmnIF4hXNg1BqhnHmgbDETF8dLPCggZWBjkQfhZpbszZnYur5DUljTcCHii5LC3J5E0yeO/1LIMyH+UvHQgyw==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">= 0.4"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/ljharb"
++      }
++    },
+     "node_modules/side-channel": {
+       "version": "1.1.0",
+       "resolved": "https://registry.npmmirror.com/side-channel/-/side-channel-1.1.0.tgz",
+@@ -7064,6 +7139,16 @@
+         "node": "*"
+       }
+     },
++    "node_modules/tree-kill": {
++      "version": "1.2.2",
++      "resolved": "https://registry.npmmirror.com/tree-kill/-/tree-kill-1.2.2.tgz",
++      "integrity": "sha512-L0Orpi8qGpRG//Nd+H90vFB+3iHnue1zSSGmNOOCh1GLJ7rUKVwV2HvijphGQS2UmhUZewS9VgvxYIdgr+fG1A==",
++      "dev": true,
++      "license": "MIT",
++      "bin": {
++        "tree-kill": "cli.js"
++      }
++    },
+     "node_modules/tslib": {
+       "version": "2.8.1",
+       "resolved": "https://registry.npmmirror.com/tslib/-/tslib-2.8.1.tgz",
+diff --git a/package.json b/package.json
+index 95e5efd..68ba471 100644
+--- a/package.json
++++ b/package.json
+@@ -4,8 +4,18 @@
+   "description": "",
+   "main": "index.js",
+   "scripts": {
++    "setup:local": "powershell -ExecutionPolicy Bypass -File ./scripts/install-local.ps1",
++    "setup:local:run": "powershell -ExecutionPolicy Bypass -File ./scripts/install-local.ps1 -RunApp",
++    "setup:local:auto": "powershell -ExecutionPolicy Bypass -File ./scripts/install-local.ps1 -AutoInstallTools",
++    "setup:local:auto:run": "powershell -ExecutionPolicy Bypass -File ./scripts/install-local.ps1 -AutoInstallTools -RunApp",
++    "setup:local:native": "powershell -ExecutionPolicy Bypass -File ./scripts/install-local-native.ps1",
++    "setup:local:native:run": "powershell -ExecutionPolicy Bypass -File ./scripts/install-local-native.ps1 -RunApp",
++    "setup:local:native:auto": "powershell -ExecutionPolicy Bypass -File ./scripts/install-local-native.ps1 -AutoInstallTools",
++    "setup:local:native:auto:run": "powershell -ExecutionPolicy Bypass -File ./scripts/install-local-native.ps1 -AutoInstallTools -RunApp",
+     "test": "jest --runInBand",
+     "dev": "nodemon src/server.js",
++    "dev:client": "npm --prefix client run dev",
++    "dev:both": "concurrently -k -n API,WEB -c cyan,magenta \"npm run dev\" \"npm run dev:client\"",
+     "start": "node src/server.js"
+   },
+   "keywords": [],
+@@ -28,6 +38,7 @@
+     "ws": "^8.18.0"
+   },
+   "devDependencies": {
++    "concurrently": "^9.2.1",
+     "jest": "^30.2.0",
+     "nodemon": "^3.1.11",
+     "supertest": "^7.1.4"
+diff --git a/src/db.js b/src/db.js
+index 9f22640..e76611b 100644
+--- a/src/db.js
++++ b/src/db.js
+@@ -1,5 +1,26 @@
+ const mysql = require("mysql2/promise");
+-require("dotenv").config();
++const path = require("path");
++const fs = require("fs");
++
++const envCandidates = [];
++if (process.env.ERP_AKKJ_ENV_PATH) {
++  envCandidates.push(process.env.ERP_AKKJ_ENV_PATH);
++}
++if (process.platform === "win32" && process.env.ProgramData) {
++  envCandidates.push(path.join(process.env.ProgramData, "Pcaviator", "ERP AKKJ", ".env"));
++}
++envCandidates.push(path.join(__dirname, "..", ".env"));
++
++for (const envPath of envCandidates) {
++  if (envPath && fs.existsSync(envPath)) {
++    require("dotenv").config({ path: envPath });
++    break;
++  }
++}
++
++if (!process.env.MYSQL_DATABASE && fs.existsSync(path.join(__dirname, "..", ".env"))) {
++  require("dotenv").config({ path: path.join(__dirname, "..", ".env"), override: false });
++}
+ 
+ function parseUrl(urlString = "") {
+   try {
+diff --git a/src/middleware/auth.js b/src/middleware/auth.js
+index c5e4f0a..7eafb24 100644
+--- a/src/middleware/auth.js
++++ b/src/middleware/auth.js
+@@ -16,7 +16,9 @@ function authMiddleware(req, res, next) {
+     req.user = decoded;
+     next();
+   } catch (err) {
+-    console.error("JWT verify error:", err);
++    if (err?.name !== "TokenExpiredError") {
++      console.error("JWT verify error:", err);
++    }
+     return res.status(401).json({ error: "Invalid or expired token" });
+   }
+ }
+diff --git a/src/server.js b/src/server.js
+index 342e53a..5ed9f20 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -1,7 +1,23 @@
+ const express = require("express");
+ const cors = require("cors");
+ const path = require("path");
+-require("dotenv").config();
++const fs = require("fs");
++
++const envCandidates = [];
++if (process.env.ERP_AKKJ_ENV_PATH) {
++  envCandidates.push(process.env.ERP_AKKJ_ENV_PATH);
++}
++if (process.platform === "win32" && process.env.ProgramData) {
++  envCandidates.push(path.join(process.env.ProgramData, "Pcaviator", "ERP AKKJ", ".env"));
++}
++envCandidates.push(path.join(__dirname, "..", ".env"));
++
++for (const envPath of envCandidates) {
++  if (envPath && fs.existsSync(envPath)) {
++    require("dotenv").config({ path: envPath });
++    break;
++  }
++}
+ 
+ const companiesRouter = require("./routes/companies");
+ const authRouter = require("./routes/auth");
+@@ -62,6 +78,14 @@ app.use(express.urlencoded({ extended: true }));
+ // Serve static files from client public directory (qz-tray.js, etc.)
+ app.use(express.static(path.join(__dirname, "..", "client", "public")));
+ 
++const clientDistPath = path.join(__dirname, "..", "client", "dist");
++const clientIndexPath = path.join(clientDistPath, "index.html");
++const hasClientBuild = fs.existsSync(clientIndexPath);
++
++if (hasClientBuild) {
++  app.use(express.static(clientDistPath));
++}
++
+ ensureReportingViews().catch((error) => {
+   console.error("Failed to initialize reporting views", error);
+ });
+@@ -69,6 +93,11 @@ ensureReportingViews().catch((error) => {
+ app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
+ 
+ app.get("/", (req, res) => {
++  if (hasClientBuild) {
++    res.sendFile(clientIndexPath);
++    return;
++  }
++
+   res.json({ message: "ERP AKKJ API is running" });
+ });
+ 
+@@ -274,6 +303,12 @@ app.use(
+   reportsRouter
+ );
+ 
++if (hasClientBuild) {
++  app.get(/^\/(?!api\/).*/, (req, res) => {
++    res.sendFile(clientIndexPath);
++  });
++}
++
+ const PORT = process.env.PORT || 4000;
+ 
+ if (require.main === module) {

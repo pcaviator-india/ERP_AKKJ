@@ -1,7 +1,23 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
-require("dotenv").config();
+const fs = require("fs");
+
+const envCandidates = [];
+if (process.env.ERP_AKKJ_ENV_PATH) {
+  envCandidates.push(process.env.ERP_AKKJ_ENV_PATH);
+}
+if (process.platform === "win32" && process.env.ProgramData) {
+  envCandidates.push(path.join(process.env.ProgramData, "Pcaviator", "ERP AKKJ", ".env"));
+}
+envCandidates.push(path.join(__dirname, "..", ".env"));
+
+for (const envPath of envCandidates) {
+  if (envPath && fs.existsSync(envPath)) {
+    require("dotenv").config({ path: envPath });
+    break;
+  }
+}
 
 const companiesRouter = require("./routes/companies");
 const authRouter = require("./routes/auth");
@@ -62,6 +78,14 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static files from client public directory (qz-tray.js, etc.)
 app.use(express.static(path.join(__dirname, "..", "client", "public")));
 
+const clientDistPath = path.join(__dirname, "..", "client", "dist");
+const clientIndexPath = path.join(clientDistPath, "index.html");
+const hasClientBuild = fs.existsSync(clientIndexPath);
+
+if (hasClientBuild) {
+  app.use(express.static(clientDistPath));
+}
+
 ensureReportingViews().catch((error) => {
   console.error("Failed to initialize reporting views", error);
 });
@@ -69,6 +93,11 @@ ensureReportingViews().catch((error) => {
 app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
 app.get("/", (req, res) => {
+  if (hasClientBuild) {
+    res.sendFile(clientIndexPath);
+    return;
+  }
+
   res.json({ message: "ERP AKKJ API is running" });
 });
 
@@ -273,6 +302,12 @@ app.use(
   requirePermission("reports.view"),
   reportsRouter
 );
+
+if (hasClientBuild) {
+  app.get(/^\/(?!api\/).*/, (req, res) => {
+    res.sendFile(clientIndexPath);
+  });
+}
 
 const PORT = process.env.PORT || 4000;
 

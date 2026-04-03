@@ -8,6 +8,15 @@ const money = (val) =>
     minimumFractionDigits: 0,
   }).format(Number(val || 0));
 
+const resolveApiBase = () => {
+  if (typeof window === "undefined") return "http://localhost:4000";
+  const { protocol, hostname, port, origin } = window.location;
+  if (port === "5173" && (hostname === "localhost" || hostname === "127.0.0.1")) {
+    return `${protocol}//${hostname}:4000`;
+  }
+  return origin;
+};
+
 export default function CustomerScreen() {
   const params = new URLSearchParams(window.location.search);
   const channel = params.get("channel") || "default";
@@ -17,7 +26,9 @@ export default function CustomerScreen() {
   const wsRef = useRef(null);
 
   useEffect(() => {
-    const apiBase = import.meta.env.VITE_API_URL || "http://localhost:4000";
+    const apiBase =
+      import.meta.env.VITE_API_URL ||
+      resolveApiBase();
     const wsUrl = apiBase.replace(/^http/i, "ws") + `/customer-screen?channel=${encodeURIComponent(channel)}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;

@@ -1,0 +1,10 @@
+﻿{
+    "rg":  "rg-akkj-test",
+    "mysqlContainer":  "akkj-mysql-cg",
+    "mysqlHost":  "akkjmysql81576.centralindia.azurecontainer.io",
+    "mysqlPort":  3306,
+    "dbName":  "erp_akkj",
+    "dbUser":  "akkjuser",
+    "dbPass":  "F9c9fb5wY8j7QrgRwPPzAa1",
+    "webApp":  "akkj-erp-api-36522"
+}

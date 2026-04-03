@@ -1,0 +1,22 @@
+services:
+  mysql:
+    image: mysql:8.0.41
+    container_name: erp-akkj-mysql-local
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: erp_akkj
+      MYSQL_USER: erpuser
+      MYSQL_PASSWORD: erppass123
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot123"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - erp_akkj_mysql_data:/var/lib/mysql
+
+volumes:
+  erp_akkj_mysql_data:
